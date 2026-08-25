@@ -1,0 +1,34 @@
+{
+  "name": "@friday/jira-adapter",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bounded Jira ticket configuration for Friday's Slack-to-Jira workflow.",
+  "scripts": {
+    "build": "tsup index.ts --format esm --platform node --target node24 --external openclaw/* --out-dir dist --clean",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "check": "npm run typecheck && npm run test && npm run build && node --check dist/index.js"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1-2"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@friday/shared": "0.3.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "files": [
+    "dist/index.js",
+    "openclaw.plugin.json",
+    "config.example.json"
+  ]
+}

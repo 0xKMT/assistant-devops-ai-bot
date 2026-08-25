@@ -1,0 +1,56 @@
+name: friday
+
+x-friday-common: &friday-common
+  image: friday:${FRIDAY_IMAGE_TAG:-2026.08.10}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - path: ./container/.env
+      required: false
+  environment:
+    HOME: /home/node
+    OPENCLAW_STATE_DIR: /home/node/.openclaw
+    FRIDAY_OPENCLAW_IMAGE_VERSION: 2026.7.1-2
+  volumes:
+    - friday_home:/home/node
+    - ${FRIDAY_REPOSITORIES_DIR:?Set FRIDAY_REPOSITORIES_DIR in container/.env}:/repos:ro
+    - ${FRIDAY_INSTANCE_CONFIG:-./config/instance.container.json}:/opt/friday/config/instance.json:ro
+    - ./container/backups:/backup
+  secrets:
+    - friday_gateway_token
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=512m
+
+services:
+  friday-gateway:
+    <<: *friday-common
+    command: ["node", "/app/openclaw.mjs", "gateway", "--bind", "lan"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRIDAY_GATEWAY_PORT:-18789}:18789"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+  friday-cli:
+    <<: *friday-common
+    profiles: ["tools"]
+    restart: "no"
+    command: ["node", "/app/openclaw.mjs", "--version"]
+
+volumes:
+  friday_home:
+    name: ${FRIDAY_HOME_VOLUME:-friday_home}
+
+secrets:
+  friday_gateway_token:
+    file: ./container/secrets/gateway-token

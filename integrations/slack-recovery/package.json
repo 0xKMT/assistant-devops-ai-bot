@@ -1,0 +1,12 @@
+{
+  "name": "@friday/slack-recovery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup friday-slack-watchdog.ts --format esm --platform node --target node24 --out-dir dist --clean",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "check": "npm run typecheck && npm run test && npm run build && node --check dist/friday-slack-watchdog.mjs"
+  }
+}

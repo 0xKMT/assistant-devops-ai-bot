@@ -1,0 +1,24 @@
+{
+  "jira": {
+    "baseUrl": "https://example.atlassian.net",
+    "emailEnv": "FRIDAY_JIRA_EMAIL",
+    "apiTokenEnv": "FRIDAY_JIRA_API_TOKEN",
+    "projectId": "10001",
+    "projectKey": "ED",
+    "assigneeAccountId": "jira-account-id",
+    "defaultPriorityId": "3",
+    "storyPointFieldId": "customfield_10028",
+    "allowedIssueTypes": { "Task": "10010", "Bug": "10011", "Story": "10012" },
+    "epicJql": "project = ED AND issuetype = Epic AND statusCategory != Done",
+    "maxEpicCandidates": 25
+  },
+  "slack": {
+    "accountId": "primary",
+    "workspaceId": "T00000000",
+    "botTokenEnv": "FRIDAY_SLACK_BOT_TOKEN"
+  },
+  "workflow": {
+    "draftTtlMinutes": 1440,
+    "maxCreateAttempts": 3
+  }
+}

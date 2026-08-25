@@ -1,0 +1,79 @@
+{
+  "id": "friday-git-adapter",
+  "name": "Friday Git Adapter",
+  "description": "Fetches configured allowlisted repositories and provides Unified PR Review Engine v3 with intent-aware Terraform, Helm, Kubernetes, Datadog Service Catalog, YAML, and JSON coverage.",
+  "version": "1.0.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "friday_git_pr_context",
+      "friday_git_read_file",
+      "friday_terraform_review",
+      "friday_gitops_review",
+      "friday_unified_pr_review",
+      "friday_batch_pr_review"
+    ]
+  },
+  "toolMetadata": {
+    "friday_git_pr_context": {
+      "optional": true
+    },
+    "friday_git_read_file": {
+      "optional": true
+    },
+    "friday_terraform_review": {
+      "optional": true
+    },
+    "friday_gitops_review": {
+      "optional": true
+    },
+    "friday_unified_pr_review": {
+      "optional": true
+    },
+    "friday_batch_pr_review": {
+      "optional": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["repositories", "binaries", "storage", "process"],
+    "properties": {
+      "repositories": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["slug", "root", "remoteUrl", "baseBranch"],
+          "properties": {
+            "slug": { "type": "string", "minLength": 3 },
+            "root": { "type": "string", "minLength": 1 },
+            "remoteUrl": { "type": "string", "minLength": 1 },
+            "baseBranch": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "binaries": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["git", "gh", "ssh", "tflint", "trivy", "helm", "kustomize", "kubeconform"],
+        "properties": {
+          "git": { "type": "string" }, "gh": { "type": "string" }, "ssh": { "type": "string" },
+          "tflint": { "type": "string" }, "trivy": { "type": "string" }, "helm": { "type": "string" },
+          "kustomize": { "type": "string" }, "kubeconform": { "type": "string" }
+        }
+      },
+      "storage": {
+        "type": "object", "additionalProperties": false, "required": ["cacheDir"],
+        "properties": { "cacheDir": { "type": "string" } }
+      },
+      "process": {
+        "type": "object", "additionalProperties": false, "required": ["home", "path"],
+        "properties": { "home": { "type": "string" }, "path": { "type": "string" } }
+      }
+    }
+  }
+}

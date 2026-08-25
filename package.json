@@ -1,0 +1,46 @@
+{
+  "name": "friday",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable, local-first DevOps AI assistant reference implementation.",
+  "workspaces": [
+    "core/shared",
+    "core/security-shield",
+    "integrations/git-adapter",
+    "integrations/jira-adapter",
+    "integrations/slack-recovery"
+  ],
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:unit": "npm run test --workspaces --if-present && node --test compat/slack/test/*.test.mjs",
+    "audit:portability": "node scripts/audit-portability.mjs",
+    "audit:architecture": "node scripts/audit-architecture.mjs",
+    "setup:preflight": "node scripts/preflight.mjs",
+    "setup:slack-compat": "node scripts/slack-compat.mjs",
+    "setup:slack-compat:apply": "node scripts/slack-compat.mjs --apply",
+    "setup:full": "node scripts/full-setup.mjs",
+    "setup:rollback": "node scripts/rollback.mjs",
+    "container:init": "node scripts/container-init.mjs",
+    "container:setup": "sh container/setup.sh",
+    "container:health": "sh container/health.sh",
+    "container:backup": "sh container/backup.sh",
+    "container:rollback": "sh container/rollback.sh",
+    "prepare:instance": "node scripts/prepare-instance.mjs",
+    "prepare:instance:check": "node scripts/prepare-instance.mjs --check",
+    "install:plugins": "node scripts/install-plugins.mjs",
+    "check": "npm run audit:portability && npm run audit:architecture && node --test compat/slack/test/*.test.mjs scripts/test/*.test.mjs && npm run check --workspaces --if-present",
+    "test": "npm run check"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

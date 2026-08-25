@@ -1,0 +1,17 @@
+{
+  "package": "@openclaw/slack",
+  "version": "2026.7.1",
+  "patchSet": "friday-slack-2026.7.1-v1",
+  "flows": {
+    "runIdPropagation": {
+      "file": "dist/pipeline.runtime-rpVpay59.js",
+      "beforeSha256": "b93c2120b970b88d44b6ede42fbd895a9d69210357064172e473c1c85c8cc724",
+      "afterSha256": "08a71ac6766a832ef71cddf5ce42b434fe06aa57c90e26e84301b7ef60f192ad"
+    },
+    "identityRefresh": {
+      "file": "dist/provider-C1-DFSpw.js",
+      "beforeSha256": "785dac1c7eb3a488477c869bb3c4e8fb299a6d426b51e4143fa13bb7823bbded",
+      "afterSha256": "0e0e73ede1cb7aaafae785f3a553d9ec19a0599860f24f0020016121c83936e7"
+    }
+  }
+}

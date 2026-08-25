@@ -1,0 +1,22 @@
+[
+  {"id":"ecs-postgres-password","expect":true,"source":"environment = [{\n  name = \"POSTGRES_PASSWORD\"\n  value = \"synthetic-password\"\n}]"},
+  {"id":"ecs-api-token","expect":true,"source":"environment = [{ name = \"API_TOKEN\", value = \"synthetic-token\" }]"},
+  {"id":"ecs-secret-key","expect":true,"source":"environment = [{ name = \"SECRET_KEY\", value = \"synthetic-key\" }]"},
+  {"id":"direct-password","expect":true,"source":"db_password = \"synthetic-password\""},
+  {"id":"direct-token","expect":true,"source":"access_token = \"synthetic-token\""},
+  {"id":"direct-private-key","expect":true,"source":"private_key = \"synthetic-key\""},
+  {"id":"json-name-value","expect":true,"source":"{ \"name\": \"ADMIN_PASSWORD\", \"value\": \"synthetic-password\" }"},
+  {"id":"map-password","expect":true,"source":"POSTGRES_PASSWORD = \"synthetic-password\""},
+  {"id":"quoted-secret-key","expect":true,"source":"\"client_secret\": \"synthetic-secret\""},
+  {"id":"lowercase-password-name","expect":true,"source":"environment = [{ name = \"database_password\", value = \"synthetic-password\" }]"},
+  {"id":"password-value-from","expect":false,"source":"secrets = [{ name = \"POSTGRES_PASSWORD\", valueFrom = aws_secretsmanager_secret.db.arn }]"},
+  {"id":"password-variable","expect":false,"source":"db_password = \"${var.db_password}\""},
+  {"id":"password-local","expect":false,"source":"db_password = \"${local.db_password}\""},
+  {"id":"password-module","expect":false,"source":"db_password = \"${module.database.password}\""},
+  {"id":"password-data","expect":false,"source":"db_password = \"${data.aws_ssm_parameter.db.value}\""},
+  {"id":"helm-template-secret","expect":false,"source":"api_token = \"{{ .Values.apiToken }}\""},
+  {"id":"non-sensitive-environment","expect":false,"source":"environment = [{ name = \"IMAGE_URL\", value = \"public.ecr.aws/example/app\" }]"},
+  {"id":"commented-password","expect":false,"source":"# db_password = \"synthetic-password\""},
+  {"id":"block-comment-password","expect":false,"source":"/* db_password = \"synthetic-password\" */"},
+  {"id":"secret-reference-object","expect":false,"source":"environment = [{ name = \"API_SECRET\", value = \"${var.api_secret}\" }]"}
+]

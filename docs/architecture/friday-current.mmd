@@ -1,0 +1,20 @@
+flowchart LR
+    User["Authorized Slack user"] --> Slack["Slack Socket Mode"]
+    Slack --> Gateway["OpenClaw gateway"]
+    Gateway --> Shield["@friday/security-shield<br/>per-turn authorization"]
+    Gateway --> Model["Codex or Claude Code"]
+    Model --> Review["@friday/git-adapter<br/>bounded review tools"]
+    Model --> Jira["@friday/jira-adapter<br/>bounded draft tools"]
+    Review --> Shared["@friday/shared<br/>host-neutral contracts"]
+    Jira --> Shared
+    Config["Fail-closed config<br/>repos + binaries + storage"] --> Review
+    Review --> Terraform["Terraform<br/>policy + TFLint + Trivy"]
+    Review --> GitOps["GitOps / Helm / Kubernetes<br/>render + schema + policy"]
+    Review --> Git["Read-only Git/GitHub broker"]
+    Git --> Repos["Allowlisted repositories"]
+    JiraConfig["Everfit Devops configuration<br/>ED + stable Jira IDs + secret reference"] --> Jira
+    Jira --> JiraCloud["Jira Cloud REST v3<br/>bounded reads + approved create"]
+    Jira --> TicketUi["Slack Web API<br/>private review + URL-only post"]
+    TicketUi --> Slack
+    Recovery["@friday/slack-recovery<br/>optional macOS watchdog"] -.-> Gateway
+    Gateway --> Slack

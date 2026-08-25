@@ -1,0 +1,72 @@
+{
+  "assistant": {
+    "name": "Friday",
+    "ownerEmail": "owner@example.com",
+    "language": "vi",
+    "timezone": "Asia/Ho_Chi_Minh"
+  },
+  "modelBackend": {
+    "profile": "codex",
+    "primaryModel": "openai/gpt-5.6-sol",
+    "command": ""
+  },
+  "runtime": {
+    "openclawVersion": "2026.7.1-2",
+    "nodeMajor": 24
+  },
+  "container": {
+    "gatewayTokenEnv": "FRIDAY_GATEWAY_TOKEN",
+    "imageVersion": "2026.7.1-2"
+  },
+  "slack": {
+    "accounts": [{
+      "accountId": "primary",
+      "accountName": "Friday DevOps",
+      "workspaceId": "T00000000",
+      "channelId": "C00000000",
+      "userId": "U00000000",
+      "botTokenEnv": "FRIDAY_PRIMARY_SLACK_BOT_TOKEN",
+      "appTokenEnv": "FRIDAY_PRIMARY_SLACK_APP_TOKEN"
+    }]
+  },
+  "jira": {
+    "baseUrl": "https://example.atlassian.net",
+    "emailEnv": "FRIDAY_JIRA_EMAIL",
+    "apiTokenEnv": "FRIDAY_JIRA_API_TOKEN",
+    "projectId": "10001",
+    "projectKey": "ED",
+    "assigneeAccountId": "jira-account-id",
+    "defaultPriorityId": "3",
+    "storyPointFieldId": "customfield_10028",
+    "allowedIssueTypes": { "Task": "10010", "Bug": "10011", "Story": "10012" },
+    "epicJql": "project = ED AND issuetype = Epic AND statusCategory != Done",
+    "maxEpicCandidates": 25,
+    "draftTtlMinutes": 1440,
+    "maxCreateAttempts": 3
+  },
+  "repositories": [
+    {
+      "slug": "example-org/platform-infrastructure",
+      "root": "/repos/platform-infrastructure",
+      "remoteUrl": "https://github.com/example-org/platform-infrastructure.git",
+      "baseBranch": "main"
+    }
+  ],
+  "binaries": {
+    "git": "/usr/bin/git",
+    "gh": "/usr/local/bin/gh",
+    "ssh": "/usr/bin/ssh",
+    "tflint": "/usr/local/bin/tflint",
+    "trivy": "/usr/local/bin/trivy",
+    "helm": "/usr/local/bin/helm",
+    "kustomize": "/usr/local/bin/kustomize",
+    "kubeconform": "/usr/local/bin/kubeconform"
+  },
+  "paths": {
+    "openclawStateDir": "/home/node/.openclaw",
+    "workspace": "/home/node/.openclaw/workspace",
+    "cacheDir": "/home/node/.openclaw/cache/friday",
+    "processHome": "/home/node",
+    "processPath": "/home/node/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  }
+}

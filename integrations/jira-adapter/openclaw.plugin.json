@@ -1,0 +1,77 @@
+{
+  "id": "friday-jira-adapter",
+  "name": "Friday Jira Adapter",
+  "description": "Provides bounded Jira context and ticket-draft preparation for Friday's Slack workflow.",
+  "version": "1.0.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "friday_jira_get_context",
+      "friday_jira_prepare_ticket"
+    ]
+  },
+  "toolMetadata": {
+    "friday_jira_get_context": {
+      "optional": true
+    },
+    "friday_jira_prepare_ticket": {
+      "optional": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["jira", "slack", "workflow"],
+    "properties": {
+      "jira": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["baseUrl", "apiTokenEnv", "projectId", "projectKey", "assigneeAccountId", "defaultPriorityId", "allowedIssueTypes", "epicJql", "maxEpicCandidates"],
+        "properties": {
+          "baseUrl": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "minLength": 1 },
+          "emailEnv": { "type": "string", "minLength": 1 },
+          "apiTokenEnv": { "type": "string", "minLength": 1 },
+          "projectId": { "type": "string", "minLength": 1 },
+          "projectKey": { "type": "string", "enum": ["ED"] },
+          "assigneeAccountId": { "type": "string", "minLength": 1 },
+          "defaultPriorityId": { "type": "string", "minLength": 1 },
+          "storyPointFieldId": { "type": "string", "minLength": 1 },
+          "allowedIssueTypes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Task", "Bug", "Story"],
+            "properties": {
+              "Task": { "type": "string", "minLength": 1 },
+              "Bug": { "type": "string", "minLength": 1 },
+              "Story": { "type": "string", "minLength": 1 }
+            }
+          },
+          "epicJql": { "type": "string", "minLength": 1 },
+          "maxEpicCandidates": { "type": "integer", "minimum": 1, "maximum": 50 }
+        }
+      },
+      "slack": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accountId", "workspaceId", "botTokenEnv"],
+        "properties": {
+          "accountId": { "type": "string", "minLength": 1 },
+          "workspaceId": { "type": "string", "minLength": 1 },
+          "botTokenEnv": { "type": "string", "minLength": 1 }
+        }
+      },
+      "workflow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["draftTtlMinutes", "maxCreateAttempts"],
+        "properties": {
+          "draftTtlMinutes": { "type": "integer", "minimum": 5, "maximum": 10080 },
+          "maxCreateAttempts": { "type": "integer", "minimum": 1, "maximum": 5 }
+        }
+      }
+    }
+  }
+}

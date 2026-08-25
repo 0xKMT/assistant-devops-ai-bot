@@ -1,0 +1,10 @@
+{
+  "theme": "base",
+  "securityLevel": "strict",
+  "flowchart": {
+    "curve": "basis",
+    "htmlLabels": true,
+    "nodeSpacing": 36,
+    "rankSpacing": 54
+  }
+}

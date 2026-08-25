@@ -1,0 +1,35 @@
+# Dependencies and generated build output
+node_modules/
+build/
+dist/
+coverage/
+
+# Operating-system and editor metadata
+.DS_Store
+*.swp
+*.tmp
+
+# Logs, caches, databases, and local clones
+*.log
+*.sqlite*
+.cache/
+cache/
+tmp/
+repos/
+repositories/
+.worktrees/
+.superpowers/
+docs/superpowers/
+
+# Local environment and release artifacts
+.env
+.env.*
+!.env.example
+*.tgz
+
+# Friday runtime state: keep local, never publish
+container/.env
+container/secrets/
+container/backups/
+config/instance.json
+config/instance.container.json

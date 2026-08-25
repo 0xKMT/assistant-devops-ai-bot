@@ -1,0 +1,17 @@
+{
+  "name": "@friday/shared",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Host-neutral schemas and result contracts shared by Friday packages.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck"
+  }
+}

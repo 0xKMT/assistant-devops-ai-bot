@@ -1,0 +1,22 @@
+{
+  "repositories": [
+    {
+      "slug": "example/platform-infrastructure",
+      "root": "/srv/friday/repos/platform-infrastructure",
+      "remoteUrl": "https://github.com/example/platform-infrastructure.git",
+      "baseBranch": "main"
+    }
+  ],
+  "binaries": {
+    "git": "/usr/bin/git",
+    "gh": "/usr/bin/gh",
+    "ssh": "/usr/bin/ssh",
+    "tflint": "/usr/bin/tflint",
+    "trivy": "/usr/bin/trivy",
+    "helm": "/usr/bin/helm",
+    "kustomize": "/usr/bin/kustomize",
+    "kubeconform": "/usr/bin/kubeconform"
+  },
+  "storage": { "cacheDir": "/var/cache/friday" },
+  "process": { "home": "/var/lib/friday", "path": "/usr/local/bin:/usr/bin:/bin" }
+}

@@ -1,0 +1,56 @@
+{
+  "display_information": {
+    "name": "Friday DevOps",
+    "description": "Owner-only, read-only infrastructure pull-request reviewer"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Friday",
+      "always_online": true
+    },
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": false,
+      "messages_tab_read_only_enabled": true
+    },
+    "assistant_view": {
+      "assistant_description": "Friday reviews allowlisted infrastructure pull requests.",
+      "suggested_prompts": [
+        {
+          "title": "Review a pull request",
+          "message": "Review this infrastructure pull request: <URL>"
+        }
+      ]
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "assistant:write",
+        "channels:history",
+        "channels:read",
+        "chat:write",
+        "groups:history",
+        "groups:read",
+        "users:read"
+      ]
+    }
+  },
+  "settings": {
+    "socket_mode_enabled": true,
+    "interactivity": {
+      "is_enabled": true
+    },
+    "event_subscriptions": {
+      "bot_events": [
+        "app_home_opened",
+        "app_mention",
+        "assistant_thread_context_changed",
+        "assistant_thread_started",
+        "message.channels",
+        "message.groups"
+      ]
+    }
+  }
+}

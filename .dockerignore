@@ -1,0 +1,17 @@
+.git
+.gitignore
+node_modules
+**/node_modules
+build
+**/build
+dist
+**/dist
+container/.env
+container/secrets
+container/backups
+config/instance.json
+config/instance.container.json
+*.tgz
+*.sqlite*
+*.log
+.DS_Store
