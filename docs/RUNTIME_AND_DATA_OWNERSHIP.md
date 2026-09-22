@@ -47,7 +47,8 @@ separate because their retention, recovery, and correctness meanings differ.
 | OpenClaw state directory | OpenClaw Gateway | Resolves plugin databases through `api.runtime.state.resolveStateDir()`; it is distinct from the workspace and validator cache. | `config/README.md`; plugin entrypoints |
 | `paths.cacheDir` / `cacheDir` | Git Adapter and local validators | Owns isolated Git mirrors plus Trivy and kubeconform caches. It is operational cache data, not OpenClaw workflow state. | `config/instance.example.json`; `scripts/prepare-instance.mjs`; `integrations/git-adapter/core.ts`; review engines |
 | `friday-slack-watchdog.json` | Slack Recovery | Optional local macOS watchdog counters and recovery state, normally below OpenClaw state. It is not an application database and is never model-facing. | `integrations/slack-recovery/friday-slack-watchdog.ts`; `integrations/slack-recovery/README.md` |
-| Generated `build/` and package `dist/` directories | Setup/build tooling | Reproducible artifacts only; not authoritative runtime state and not committed. | `.gitignore`; `docs/ARCHITECTURE.md` |
+| Generated `build/workspace/`, `build/openclaw/`, and package `dist/` directories | Setup/build tooling | Reproducible staging and package outputs; not authoritative runtime state and not committed. | `.gitignore`; `scripts/prepare-instance.mjs`; workspace build scripts |
+| `build/backups/` | Native setup and rollback tooling | Timestamped recovery snapshots may contain prior OpenClaw configuration, workspace files, and a state `.env`. They are private local recovery data that may contain private configuration or secrets; preserve and handle them according to the explicit rollback procedure. | `scripts/full-setup.mjs`; `scripts/rollback-setup.mjs`; `docs/ROLLBACK.md` |
 | `.gitnexus/` | Developer tooling | Local generated graph/index state. It is ignored by Git, excluded from Docker context, and trusted only when its path and commit match the active checkout. | `.gitignore`; `.dockerignore`; `scripts/lib/portability-audit.mjs` |
 
 ## Recovery boundaries
@@ -65,6 +66,9 @@ separate because their retention, recovery, and correctness meanings differ.
   it does not repair OpenClaw, authorize a requester, or recover Jira state.
 - No recovery operation may weaken Security Shield, expose secrets, or turn a
   read-only/model-safe interface into a mutation interface.
+- Do not discard `build/backups/` as generated build output. Review the exact
+  backup selected by the operator and follow `docs/ROLLBACK.md`; never commit or
+  share backup contents.
 
 ## Evidence limits
 

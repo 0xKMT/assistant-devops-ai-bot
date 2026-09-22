@@ -120,6 +120,32 @@ test("reports hook-level cost telemetry unavailable when no cost field is declar
   assert.equal(report.conclusions.hookCost, "unavailable");
 });
 
+test("classifies unsupported declaration structures as inconclusive", async (t) => {
+  const declarations = Object.values({
+    agentContext: "PluginHookAgentContext",
+    agentEnd: "PluginHookAgentEndEvent",
+    modelStarted: "PluginHookModelCallStartedEvent",
+    modelEnded: "PluginHookModelCallEndedEvent",
+    llmInput: "PluginHookLlmInputEvent",
+    llmOutput: "PluginHookLlmOutputEvent",
+  }).map((name) => `export type ${name} = unknown;`).join("\n");
+  const executablePath = await createFixture(t, { declarations });
+  const report = await inspectOpenClawObservability({ executablePath, expectedVersion });
+
+  assert.equal(report.evidence, "inconclusive-declarations");
+});
+
+test("parses supported object declarations written on one line", async (t) => {
+  const declarations = completeDeclarations.replaceAll("\n", " ");
+  const executablePath = await createFixture(t, { declarations });
+  const report = await inspectOpenClawObservability({ executablePath, expectedVersion });
+
+  assert.equal(report.evidence, "validated-declarations");
+  assert.deepEqual(report.hooks.agent_end.fields, ["durationMs", "error", "messages", "runId", "success"]);
+  assert.deepEqual(report.hooks.llm_output.usageFields, ["cacheRead", "cacheWrite", "input", "output", "total"]);
+  assert.equal(report.conclusions.tokenUsage, "declared-on-llm_output");
+});
+
 function rootPath(executablePath) {
   return path.dirname(executablePath);
 }

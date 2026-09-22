@@ -63,7 +63,7 @@ export async function inspectOpenClawObservability({ executablePath, expectedVer
       if (hookName === "llm_output") hooks[hookName].usageFields = collectNestedFields(expression, "usage");
     }
 
-    const complete = Object.values(hooks).every((hook) => hook.declared);
+    const complete = Object.values(hooks).every((hook) => hook.declared && hook.fields.length > 0);
     return createReport({
       evidence: complete ? "validated-declarations" : "inconclusive-declarations",
       expectedVersion,
@@ -126,18 +126,24 @@ function collectFields(name, declarations, seen = new Set()) {
 }
 
 function fieldsFromObject(expression) {
-  const objectStart = expression.indexOf("{");
+  const source = stripComments(expression);
+  const objectStart = source.indexOf("{");
   if (objectStart === -1) return [];
-  const body = expression.slice(objectStart);
   const fields = [];
   let depth = 0;
+  let segmentStart = objectStart + 1;
 
-  for (const line of body.split("\n")) {
-    if (depth === 1) {
-      const match = line.match(/^\s*([A-Za-z_$][\w$]*)\??\s*:/);
-      if (match) fields.push(match[1]);
+  for (let index = objectStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") depth += 1;
+    else if (character === "}") {
+      if (depth === 1) addField(source.slice(segmentStart, index), fields);
+      depth -= 1;
+      if (depth === 0) break;
+    } else if (character === ";" && depth === 1) {
+      addField(source.slice(segmentStart, index), fields);
+      segmentStart = index + 1;
     }
-    depth += count(line, "{") - count(line, "}");
   }
   return [...new Set(fields)].sort();
 }
@@ -150,8 +156,15 @@ function collectNestedFields(expression, propertyName) {
   return fieldsFromObject(expression.slice(objectStart));
 }
 
-function count(value, character) {
-  return [...value].filter((entry) => entry === character).length;
+function addField(segment, fields) {
+  const match = segment.match(/^\s*([A-Za-z_$][\w$]*)\??\s*:/);
+  if (match) fields.push(match[1]);
+}
+
+function stripComments(value) {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/[^\n]*/g, " ");
 }
 
 function createEmptyHooks() {

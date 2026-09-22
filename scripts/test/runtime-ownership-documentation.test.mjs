@@ -30,5 +30,13 @@ test("runtime ownership documentation preserves current and target boundaries", 
     "cacheDir",
     "friday-learning.sqlite",
     "Target, not current",
+    "build/backups/",
+    "private configuration or secrets",
   ]) assert.ok(document.includes(fact), `missing ownership fact: ${fact}`);
+
+  assert.equal(
+    document.includes("Reproducible artifacts only; not authoritative runtime state"),
+    false,
+    "must not classify rollback backups as reproducible artifacts",
+  );
 });
