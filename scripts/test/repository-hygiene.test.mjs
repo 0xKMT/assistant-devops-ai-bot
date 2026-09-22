@@ -11,13 +11,19 @@ test("public repository ignores local runtime state and documents container depl
     .filter(Boolean));
 
   for (const required of [
-    "node_modules/", "build/", "dist/", ".DS_Store", "*.log", "*.sqlite*", "*.tgz",
+    "node_modules/", "build/", "dist/", ".DS_Store", ".gitnexus/", "*.log", "*.sqlite*", "*.tgz",
     "container/.env", "container/secrets/", "container/backups/",
     "config/instance.json", "config/instance.container.json",
   ]) assert.ok(ignoreLines.has(required), `missing ignore rule: ${required}`);
 
   assert.ok(ignoreLines.has("build/"), "generated Compose secret mappings must stay ignored");
   assert.ok(ignoreLines.has("container/secrets/"), "account token files must stay ignored");
+
+  const dockerIgnoreLines = new Set((await readFile(new URL(".dockerignore", root), "utf8"))
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean));
+  assert.ok(dockerIgnoreLines.has(".gitnexus"), "local GitNexus state must stay outside image contexts");
 
   const readme = await readFile(new URL("README.md", root), "utf8");
   for (const heading of ["# Friday", "## Features", "## Technology Stack", "## Container Deployment"]) {
