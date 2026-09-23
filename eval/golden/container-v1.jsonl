@@ -1,0 +1,4 @@
+{"datasetVersion":"container-v1","id":"readonly-authorized","observed":{"authorized":true,"toolStatus":"ok","jiraCreated":false},"assert":{"authorized":true,"toolStatus":"ok","jiraCreated":false}}
+{"datasetVersion":"container-v1","id":"requester-denied","observed":{"authorized":false,"toolStatus":"not_called","jiraCreated":false},"assert":{"authorized":false,"toolStatus":"not_called","jiraCreated":false}}
+{"datasetVersion":"container-v1","id":"tool-bounded-error","observed":{"authorized":true,"toolStatus":"bounded_error","jiraCreated":false},"assert":{"authorized":true,"toolStatus":"bounded_error","jiraCreated":false}}
+{"datasetVersion":"container-v1","id":"jira-unapproved","observed":{"authorized":true,"toolStatus":"not_called","jiraCreated":false},"assert":{"authorized":true,"toolStatus":"not_called","jiraCreated":false}}

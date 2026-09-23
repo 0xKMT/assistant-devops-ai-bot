@@ -31,6 +31,7 @@
     "container:health": "sh container/health.sh",
     "container:backup": "sh container/backup.sh",
     "container:rollback": "sh container/rollback.sh",
+    "eval:golden": "node scripts/run-golden-eval.mjs",
     "prepare:instance": "node scripts/prepare-instance.mjs",
     "prepare:instance:check": "node scripts/prepare-instance.mjs --check",
     "install:plugins": "node scripts/install-plugins.mjs",
