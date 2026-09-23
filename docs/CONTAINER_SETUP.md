@@ -154,6 +154,69 @@ The health script checks container state, `/healthz`, `/readyz`, configuration,
 model authentication, and Slack deep status. Then run the complete
 [Acceptance Checklist](ACCEPTANCE.md), including the non-owner silent-deny test.
 
+## Optional Phase 1 Observability (Container Only)
+
+**Current:** plain `compose.yaml` runs Friday without diagnostics, Collector, or
+Phoenix. **Validated:** the opt-in overlay passes Compose and Collector config
+checks, the pinned image builds with `diagnostics-otel`, the synthetic
+post-Collector privacy probe passes, and `npm run eval:golden` reproduces four
+synthetic results. **Target:** an authorized Slack request, read-only tool, and
+response appear in one Phoenix trace without protected content.
+**Runtime-proven:** not yet; only a controlled configured Friday turn can
+establish that state. The golden fixtures do not evaluate a live model.
+
+Complete the ordinary `container:setup --apply` and acceptance procedure above
+separately before opting in. The observability overlay does not initialize
+credentials, install into persistent Friday state, or authorize a requester.
+From the repository root, validate and start the overlay:
+
+```bash
+docker compose --env-file container/.env \
+  -f compose.yaml -f build/container-secrets.compose.yaml \
+  -f compose.observability.yaml --profile observability config --quiet
+docker compose --env-file container/.env \
+  -f compose.yaml -f build/container-secrets.compose.yaml \
+  -f compose.observability.yaml --profile observability up -d --build
+```
+
+Phoenix UI is at `http://127.0.0.1:6006`. The Collector has no published host
+port. Phoenix data uses the separate `friday_phoenix_data` named volume; it is
+not a Friday audit, Jira workflow, cache, or authorization database. The
+gateway reads a private alternate config on its tmpfs only while the overlay
+is active. Its persisted `openclaw.json` remains the plain configuration.
+
+For a controlled runtime check, ask the configured owner to send one synthetic,
+authorized, read-only Slack request. In Phoenix, confirm
+`openclaw.message.processed`, `openclaw.run`, `openclaw.tool.execution`, and
+`openclaw.message.delivery` share one trace ID. Inspect only in the private UI:
+no prompt, Slack text, secret, local path, raw identifier, tool argument or
+output, event, link, status message, or synthetic sentinel may appear. A
+missing span or uninspected payload means **Not runtime-proven**; do not enable
+content capture to force a trace. Security Shield and Jira approval remain
+authoritative regardless of telemetry health. Record only the evidence state
+and pass/fail in shared notes, never a raw trace or runtime payload.
+
+Run the independent, offline golden baseline with `npm run eval:golden`. Its
+versioned source is `eval/golden/container-v1.jsonl`; it makes no Slack, Jira,
+model, or infrastructure call. A passing result proves the deterministic
+fixture/evaluator contract, not live request quality.
+
+To stop observability without deleting either named volume, then return to the
+plain gateway:
+
+```bash
+docker compose --env-file container/.env \
+  -f compose.yaml -f build/container-secrets.compose.yaml \
+  -f compose.observability.yaml --profile observability down
+sh container/compose.sh up -d friday-gateway
+```
+
+The `down` command stops the Friday gateway too; the second command restarts
+the ordinary uninstrumented service. Do not add `-v` to `down`: volume deletion
+is a separate owner decision. To roll back the Phase 1 implementation, revert
+its commits, rebuild the image, and restart the plain service while retaining
+`friday_home` and `friday_phoenix_data` for recovery/review.
+
 ## 7. Backup and Rollback
 
 ```bash
