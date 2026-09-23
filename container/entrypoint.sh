@@ -25,4 +25,10 @@ done
 jira_env=$(jq -r '.jira.apiTokenEnv' /opt/friday/config/instance.json)
 load_secret "$jira_env" /run/secrets/friday_jira_api_token
 
+if [ "${FRIDAY_OBSERVABILITY:-0}" = "1" ]; then
+  node /opt/friday/source/scripts/render-observability-config.mjs \
+    /home/node/.openclaw/openclaw.json /tmp/openclaw-observability.json
+  export OPENCLAW_CONFIG_PATH=/tmp/openclaw-observability.json
+fi
+
 exec tini -s -- "$@"
