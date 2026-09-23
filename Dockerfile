@@ -81,6 +81,13 @@ RUN HOME=/tmp/friday-plugin-home OPENCLAW_STATE_DIR=/tmp/friday-plugin-state \
       --apply \
     && rm -rf /tmp/friday-plugin-home /tmp/friday-plugin-state
 
+RUN HOME=/tmp/friday-diagnostics-home OPENCLAW_STATE_DIR=/tmp/friday-diagnostics-state \
+      openclaw plugins install "npm:@openclaw/diagnostics-otel@2026.7.1" \
+    && diagnostics_project="$(find /tmp/friday-diagnostics-state/npm/projects -mindepth 1 -maxdepth 1 -type d | head -n 1)" \
+    && test -n "$diagnostics_project" \
+    && cp -a "$diagnostics_project" /opt/friday/plugins/diagnostics-project \
+    && rm -rf /tmp/friday-diagnostics-home /tmp/friday-diagnostics-state
+
 COPY . /opt/friday/source
 COPY --from=friday-build /src/integrations/git-adapter/dist /opt/friday/source/integrations/git-adapter/dist
 COPY --from=friday-build /src/integrations/jira-adapter/dist /opt/friday/source/integrations/jira-adapter/dist

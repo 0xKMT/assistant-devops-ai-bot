@@ -1,0 +1,37 @@
+services:
+  friday-gateway:
+    environment:
+      FRIDAY_OBSERVABILITY: "1"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0@sha256:fd328de2552466ad78385e1b1289c3f2402b1c45f265b252aab1955b42845ac1
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./container/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  phoenix:
+    image: arizephoenix/phoenix:version-20.15.0-nonroot@sha256:f77e2d45a7ebf78d02b7a5fa179315ecd8aef7a57640a328d02f578e62964833
+    profiles: ["observability"]
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - friday_phoenix_data:/mnt/data
+    ports:
+      - "127.0.0.1:6006:6006"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  friday_phoenix_data:

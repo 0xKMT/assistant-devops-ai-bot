@@ -1,0 +1,35 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  filter/known:
+    error_mode: propagate
+    traces:
+      span:
+        - 'name != "openclaw.message.processed" and name != "openclaw.run" and name != "openclaw.tool.execution" and name != "openclaw.message.delivery" and name != "openclaw.model.call" and name != "openclaw.model.usage"'
+  transform/privacy:
+    error_mode: propagate
+    trace_statements:
+      - context: span
+        statements:
+          - 'keep_keys(resource.attributes, ["service.name"])'
+          - 'keep_keys(instrumentation_scope.attributes, [])'
+          - 'keep_keys(span.attributes, ["openclaw.channel", "openclaw.outcome", "openclaw.toolName", "gen_ai.tool.name", "openclaw.errorCategory", "gen_ai.operation.name"])'
+          - 'set(span.events, nil)'
+          - 'set(span.links, nil)'
+          - 'set(span.trace_state, "")'
+          - 'set(span.status.message, "")'
+
+exporters:
+  otlphttp/phoenix:
+    traces_endpoint: http://phoenix:6006/v1/traces
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [filter/known, transform/privacy]
+      exporters: [otlphttp/phoenix]
