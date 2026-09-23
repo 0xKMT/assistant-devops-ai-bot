@@ -43,14 +43,26 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
 
     const payload = {
       resourceSpans: [{
-        resource: { attributes: [attribute("service.name", "friday-gateway"), attribute("secret.resource", "FRIDAY_SENTINEL_RESOURCE")] },
+        schemaUrl: "FRIDAY_SENTINEL_RESOURCE_SCHEMA",
+        resource: { attributes: [attribute("service.name", "FRIDAY_SENTINEL_SERVICE"), attribute("secret.resource", "FRIDAY_SENTINEL_RESOURCE")] },
         scopeSpans: [{
-          scope: { name: "openclaw", attributes: [attribute("secret.scope", "FRIDAY_SENTINEL_SCOPE")] },
+          schemaUrl: "FRIDAY_SENTINEL_SCOPE_SCHEMA",
+          scope: {
+            name: "FRIDAY_SENTINEL_SCOPE_NAME",
+            version: "FRIDAY_SENTINEL_SCOPE_VERSION",
+            attributes: [attribute("secret.scope", "FRIDAY_SENTINEL_SCOPE")],
+          },
           spans: [{
             traceId,
             spanId,
             name: "openclaw.tool.execution",
-            attributes: [attribute("openclaw.outcome", "ok"), attribute("secret.span", "FRIDAY_SENTINEL_SPAN")],
+            attributes: [
+              attribute("openclaw.outcome", "ok"),
+              attribute("openclaw.toolName", "FRIDAY_SENTINEL_TOOL"),
+              attribute("openclaw.errorCategory", "FRIDAY_SENTINEL_ERROR"),
+              attribute("gen_ai.operation.name", "FRIDAY_SENTINEL_OPERATION"),
+              attribute("secret.span", "FRIDAY_SENTINEL_SPAN"),
+            ],
             events: [{ name: "FRIDAY_SENTINEL_EVENT", attributes: [attribute("secret.event", "FRIDAY_SENTINEL_EVENT_ATTRIBUTE")] }],
             links: [{ traceId, spanId, attributes: [attribute("secret.link", "FRIDAY_SENTINEL_LINK")] }],
             status: { code: 2, message: "FRIDAY_SENTINEL_STATUS" },
@@ -59,6 +71,15 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
             traceId,
             spanId: "3333333333333333",
             name: "FRIDAY_SENTINEL_UNKNOWN_SPAN",
+          }, {
+            traceId,
+            spanId: "4444444444444444",
+            name: "openclaw.message.processed",
+            attributes: [
+              attribute("openclaw.channel", "FRIDAY_SENTINEL_CHANNEL"),
+              attribute("openclaw.outcome", "FRIDAY_SENTINEL_OUTCOME"),
+              attribute("gen_ai.tool.name", "FRIDAY_SENTINEL_GEN_AI_TOOL"),
+            ],
           }],
         }],
       }],
@@ -87,6 +108,9 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     }
     assert.match(output, new RegExp(traceId));
     assert.match(output, /openclaw\.outcome.*ok/s);
+    assert.match(output, /openclaw\.channel: Str\(other\)/);
+    assert.match(output, /openclaw\.outcome: Str\(other\)/);
+    assert.match(output, /service\.name: Str\(friday-gateway\)/);
     assert.doesNotMatch(output, /FRIDAY_SENTINEL_/);
   } finally {
     if (started) spawnSync("docker", ["stop", container], { encoding: "utf8" });

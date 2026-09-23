@@ -13,6 +13,7 @@ const captureContent = Object.fromEntries([
 const otelSettings = Object.freeze({
   enabled: true,
   endpoint: "http://otel-collector:4318",
+  tracesEndpoint: "http://otel-collector:4318/v1/traces",
   protocol: "http/protobuf",
   serviceName: "friday-gateway",
   traces: true,

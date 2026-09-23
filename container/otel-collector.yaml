@@ -16,8 +16,16 @@ processors:
       - context: span
         statements:
           - 'keep_keys(resource.attributes, ["service.name"])'
+          - 'set(resource.attributes["service.name"], "friday-gateway")'
           - 'keep_keys(instrumentation_scope.attributes, [])'
-          - 'keep_keys(span.attributes, ["openclaw.channel", "openclaw.outcome", "openclaw.toolName", "gen_ai.tool.name", "openclaw.errorCategory", "gen_ai.operation.name"])'
+          - 'set(instrumentation_scope.name, "openclaw-diagnostics")'
+          - 'set(instrumentation_scope.version, "")'
+          - 'set(resource.schema_url, "")'
+          - 'set(scope.schema_url, "")'
+          - 'keep_keys(span.attributes, ["openclaw.channel", "openclaw.outcome", "openclaw.toolName"])'
+          - 'set(span.attributes["openclaw.channel"], "other") where span.attributes["openclaw.channel"] != "slack"'
+          - 'set(span.attributes["openclaw.outcome"], "other") where span.attributes["openclaw.outcome"] != "ok" and span.attributes["openclaw.outcome"] != "success" and span.attributes["openclaw.outcome"] != "error" and span.attributes["openclaw.outcome"] != "blocked"'
+          - 'set(span.attributes["openclaw.toolName"], "other") where span.attributes["openclaw.toolName"] != "friday_git_pr_context" and span.attributes["openclaw.toolName"] != "friday_git_read_file" and span.attributes["openclaw.toolName"] != "friday_terraform_review" and span.attributes["openclaw.toolName"] != "friday_gitops_review" and span.attributes["openclaw.toolName"] != "friday_unified_pr_review" and span.attributes["openclaw.toolName"] != "friday_batch_pr_review" and span.attributes["openclaw.toolName"] != "friday_jira_get_context" and span.attributes["openclaw.toolName"] != "friday_jira_prepare_ticket"'
           - 'set(span.events, nil)'
           - 'set(span.links, nil)'
           - 'set(span.trace_state, "")'
