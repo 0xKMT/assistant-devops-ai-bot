@@ -18,6 +18,7 @@ test("opt-in diagnostics preserves existing plugins and denies content capture",
   const actual = observabilityConfig(base);
 
   assert.equal(JSON.stringify(base), before);
+  assert.deepEqual(actual.plugins.load.paths, base.plugins.load.paths);
   assert.deepEqual(actual.plugins.allow, ["slack", "friday-security-shield", "diagnostics-otel"]);
   assert.equal(actual.plugins.entries["friday-security-shield"].enabled, true);
   assert.equal(actual.plugins.entries["diagnostics-otel"].enabled, true);
@@ -42,6 +43,18 @@ test("opt-in diagnostics preserves existing plugins and denies content capture",
     },
   });
   assert.deepEqual(observabilityConfig(actual).plugins.allow, actual.plugins.allow);
+});
+
+test("opt-in diagnostics removes a stale external copy so bundled plugin is selected", () => {
+  const externalPath = "/opt/friday/plugins/diagnostics-project/node_modules/@openclaw/diagnostics-otel";
+  const slackPath = "/opt/friday/plugins/slack-project/node_modules/@openclaw/slack";
+  const base = { plugins: { load: { paths: [slackPath, externalPath] } } };
+
+  const actual = observabilityConfig(base);
+
+  assert.deepEqual(actual.plugins.load.paths, [slackPath]);
+  assert.deepEqual(base.plugins.load.paths, [slackPath, externalPath]);
+  assert.equal(actual.plugins.entries["diagnostics-otel"].enabled, true);
 });
 
 test("render writes a private alternate config and never changes source bytes", async () => {

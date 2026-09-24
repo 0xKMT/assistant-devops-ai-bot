@@ -1,4 +1,4 @@
-const pluginPath = "/opt/friday/plugins/diagnostics-project/node_modules/@openclaw/diagnostics-otel";
+const externalDiagnosticsPluginPath = "/opt/friday/plugins/diagnostics-project/node_modules/@openclaw/diagnostics-otel";
 
 const captureContent = Object.fromEntries([
   "enabled",
@@ -29,8 +29,10 @@ export function observabilityConfig(base) {
   }
   const next = structuredClone(base);
   next.plugins ??= {};
-  next.plugins.load ??= {};
-  next.plugins.load.paths = [...new Set([...(next.plugins.load.paths ?? []), pluginPath])];
+  if (next.plugins.load?.paths) {
+    // The external copy lacks the bundled plugin's internal diagnostics capability.
+    next.plugins.load.paths = next.plugins.load.paths.filter((path) => path !== externalDiagnosticsPluginPath);
+  }
   next.plugins.allow = [...new Set([...(next.plugins.allow ?? []), "diagnostics-otel"])];
   next.plugins.entries = { ...next.plugins.entries, "diagnostics-otel": { enabled: true } };
   next.diagnostics = { ...next.diagnostics, enabled: true, otel: otelSettings };
