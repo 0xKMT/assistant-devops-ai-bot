@@ -20,6 +20,10 @@ function attribute(key, value) {
   return { key, value: { stringValue: value } };
 }
 
+function integerAttribute(key, value) {
+  return { key, value: { intValue: String(value) } };
+}
+
 test("Collector exports allowed metadata and strips every protected OTLP field", { timeout: 30000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "friday-collector-privacy-"));
   const container = `friday-otel-privacy-${process.pid}`;
@@ -60,6 +64,11 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
               attribute("openclaw.outcome", "ok"),
               attribute("openclaw.toolName", "FRIDAY_SENTINEL_TOOL"),
               attribute("openclaw.errorCategory", "FRIDAY_SENTINEL_ERROR"),
+              attribute("openclaw.errorCode", "FRIDAY_SENTINEL_ERROR_CODE"),
+              attribute("gen_ai.provider.name", "FRIDAY_SENTINEL_PROVIDER"),
+              attribute("gen_ai.request.model", "FRIDAY_SENTINEL_MODEL"),
+              attribute("gen_ai.usage.input_tokens", "FRIDAY_SENTINEL_TOKEN_AS_TEXT"),
+              integerAttribute("gen_ai.usage.output_tokens", 999),
               attribute("gen_ai.operation.name", "FRIDAY_SENTINEL_OPERATION"),
               attribute("secret.span", "FRIDAY_SENTINEL_SPAN"),
             ],
@@ -79,6 +88,28 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
               attribute("openclaw.channel", "FRIDAY_SENTINEL_CHANNEL"),
               attribute("openclaw.outcome", "FRIDAY_SENTINEL_OUTCOME"),
               attribute("gen_ai.tool.name", "FRIDAY_SENTINEL_GEN_AI_TOOL"),
+            ],
+          }, {
+            traceId,
+            spanId: "5555555555555555",
+            name: "openclaw.model.usage",
+            attributes: [
+              integerAttribute("gen_ai.usage.input_tokens", 42),
+              integerAttribute("gen_ai.usage.output_tokens", 12),
+              integerAttribute("gen_ai.usage.cache_read.input_tokens", 7),
+              integerAttribute("gen_ai.usage.cache_creation.input_tokens", 3),
+              attribute("gen_ai.provider.name", "openai"),
+              attribute("gen_ai.request.model", "openai/gpt-5.6-sol"),
+              attribute("openclaw.tokens.input", "FRIDAY_SENTINEL_TOKEN_AS_TEXT"),
+              attribute("gen_ai.input.messages", "FRIDAY_SENTINEL_PROMPT"),
+            ],
+          }, {
+            traceId,
+            spanId: "6666666666666666",
+            name: "openclaw.tool.execution",
+            attributes: [
+              attribute("openclaw.errorCategory", "timeout"),
+              attribute("openclaw.errorCode", "AUTH_REQUIRED"),
             ],
           }],
         }],
@@ -110,6 +141,15 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     assert.match(output, /openclaw\.outcome.*ok/s);
     assert.match(output, /openclaw\.channel: Str\(other\)/);
     assert.match(output, /openclaw\.outcome: Str\(other\)/);
+    assert.match(output, /gen_ai\.usage\.input_tokens: Int\(42\)/);
+    assert.match(output, /gen_ai\.usage\.output_tokens: Int\(12\)/);
+    assert.match(output, /gen_ai\.usage\.cache_read\.input_tokens: Int\(7\)/);
+    assert.match(output, /gen_ai\.usage\.cache_creation\.input_tokens: Int\(3\)/);
+    assert.match(output, /gen_ai\.provider\.name: Str\(openai\)/);
+    assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-sol\)/);
+    assert.match(output, /openclaw\.errorCategory: Str\(timeout\)/);
+    assert.match(output, /openclaw\.errorCode: Str\(AUTH_REQUIRED\)/);
+    assert.doesNotMatch(output, /Int\(999\)/);
     assert.match(output, /service\.name: Str\(friday-gateway\)/);
     assert.doesNotMatch(output, /FRIDAY_SENTINEL_/);
   } finally {
