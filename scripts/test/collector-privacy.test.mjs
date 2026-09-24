@@ -111,6 +111,58 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
               attribute("openclaw.errorCategory", "timeout"),
               attribute("openclaw.errorCode", "AUTH_REQUIRED"),
             ],
+          }, {
+            traceId,
+            spanId: "7777777777777777",
+            name: "openclaw.harness.run",
+            attributes: [attribute("secret.harness", "FRIDAY_SENTINEL_HARNESS")],
+          }, {
+            traceId,
+            spanId: "8888888888888888",
+            parentSpanId: "7777777777777777",
+            name: "openclaw.run",
+            attributes: [attribute("openclaw.outcome", "success")],
+          }, {
+            traceId,
+            spanId: "9999999999999999",
+            parentSpanId: "8888888888888888",
+            name: "openclaw.model.call",
+            attributes: [
+              attribute("gen_ai.system", "openai"),
+              attribute("gen_ai.request.model", "openai/gpt-5.6-luna"),
+              integerAttribute("openclaw.model_call.prompt.input_messages_count", 2),
+              integerAttribute("openclaw.model_call.prompt.input_messages_chars", 123),
+              integerAttribute("openclaw.model_call.prompt.system_prompt_chars", 44),
+              integerAttribute("openclaw.model_call.prompt.tool_definitions_count", 3),
+              integerAttribute("openclaw.model_call.prompt.tool_definitions_chars", 55),
+              integerAttribute("openclaw.model_call.prompt.total_chars", 222),
+              attribute("secret.model", "FRIDAY_SENTINEL_MODEL_CONTENT"),
+            ],
+            events: [
+              { name: "openclaw.provider.request", attributes: [attribute("openclaw.upstreamRequestIdHash", "FRIDAY_SENTINEL_REQUEST_HASH")] },
+              { name: "FRIDAY_SENTINEL_UNKNOWN_EVENT", attributes: [attribute("secret.event", "FRIDAY_SENTINEL_EVENT_CONTENT")] },
+            ],
+            status: { code: 2, message: "FRIDAY_SENTINEL_RAW_STATUS" },
+          }, {
+            traceId,
+            spanId: "aaaaaaaaaaaaaaaa",
+            name: "openclaw.model.usage",
+            attributes: [
+              attribute("gen_ai.system", "openai"),
+              attribute("gen_ai.request.model", "openai/gpt-5.6-terra"),
+            ],
+          }, {
+            traceId,
+            spanId: "bbbbbbbbbbbbbbbb",
+            name: "openclaw.model.call",
+            attributes: [
+              attribute("gen_ai.system", "FRIDAY_SENTINEL_PROVIDER"),
+              attribute("gen_ai.request.model", "FRIDAY_SENTINEL_MODEL"),
+              attribute("openclaw.model_call.prompt.input_messages_count", "FRIDAY_SENTINEL_BAD_COUNT"),
+              integerAttribute("openclaw.model_call.prompt.total_chars", -1),
+              attribute("openclaw.errorCategory", "timeout"),
+            ],
+            status: { code: 2, message: "FRIDAY_SENTINEL_RAW_STATUS_TWO" },
           }],
         }],
       }],
@@ -149,6 +201,22 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-sol\)/);
     assert.match(output, /openclaw\.errorCategory: Str\(timeout\)/);
     assert.match(output, /openclaw\.errorCode: Str\(AUTH_REQUIRED\)/);
+    assert.match(output, /openclaw\.harness\.run/);
+    assert.match(output, /Parent ID\s+: 7777777777777777\n\s+ID\s+: 8888888888888888/);
+    assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-luna\)/);
+    assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-terra\)/);
+    assert.match(output, /gen_ai\.provider\.name: Str\(openai\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.input_messages_count: Int\(2\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.input_messages_chars: Int\(123\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.system_prompt_chars: Int\(44\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.tool_definitions_count: Int\(3\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.tool_definitions_chars: Int\(55\)/);
+    assert.match(output, /openclaw\.model_call\.prompt\.total_chars: Int\(222\)/);
+    assert.match(output, /openclaw\.provider\.request/);
+    assert.match(output, /gen_ai\.request\.model: Str\(other\)/);
+    assert.match(output, /gen_ai\.provider\.name: Str\(other\)/);
+    assert.match(output, /Status message : timeout/);
+    assert.doesNotMatch(output, /openclaw\.model_call\.prompt\.total_chars: Int\(-1\)/);
     assert.doesNotMatch(output, /Int\(999\)/);
     assert.match(output, /service\.name: Str\(friday-gateway\)/);
     assert.doesNotMatch(output, /FRIDAY_SENTINEL_/);
