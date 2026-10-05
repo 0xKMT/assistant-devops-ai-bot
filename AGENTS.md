@@ -3,6 +3,21 @@
 Friday is a private npm-workspaces monorepo for a local-first DevOps AI
 assistant. Follow these instructions when working in this repository.
 
+## Authority and reading order
+
+- When documents disagree: `AGENTS.md` > [SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md)
+  > [ROADMAP.md](docs/ROADMAP.md) > the current phase plan
+  (`docs/PHASE_<n>_*.md`) > anything else. Read them in that order before work.
+- Before any change, identify its phase, the items touched and their status.
+  Use the synced [phase-work skill](.agents/skills/phase-work/SKILL.md)
+  ([Claude copy](.claude/skills/phase-work/SKILL.md)) for phase work.
+- One phase per change: one worktree / PR. A `Target` item needs an approved
+  phase plan before code; never build `Deferred` or `Prohibited` items.
+- Update `SYSTEM_DESIGN.md` in the same change when architecture or a boundary
+  changes; update `ROADMAP.md` when a phase or gate completes.
+- Existing [security and scope](#security-and-scope), [coding conventions](#coding-conventions)
+  and [validation](#validation) rules below remain binding.
+
 ## Serena project knowledge
 
 - Relevant project knowledge is stored in `.serena/memories/`.
