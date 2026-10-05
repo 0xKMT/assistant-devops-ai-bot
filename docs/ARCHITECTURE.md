@@ -1,5 +1,7 @@
 # Friday Architecture
 
+For the target system, read [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md); this document is the detailed Current view.
+
 Friday is an npm monorepo with five independent workspaces. OpenClaw is the
 runtime host; Friday supplies plugins, contracts, setup automation, and an
 optional recovery layer.
