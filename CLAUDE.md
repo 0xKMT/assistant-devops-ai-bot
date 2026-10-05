@@ -1,3 +1,5 @@
+@AGENTS.md
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

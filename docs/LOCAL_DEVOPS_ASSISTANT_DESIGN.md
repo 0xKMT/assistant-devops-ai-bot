@@ -1,5 +1,9 @@
 # Friday Local DevOps Assistant — Architecture Design
 
+> [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) and [ROADMAP.md](ROADMAP.md) supersede
+> this historical design wherever they differ. Use them for current authority,
+> status and delivery order.
+
 > Status: approved architectural direction; implementation has not started.
 >
 > Audience: AI coding agents and maintainers working in this repository.
@@ -64,8 +68,8 @@ Known baseline limitation:
 - Gemini is not currently supported;
 - exact model token and cost telemetry is not proven against the pinned OpenClaw
   runtime;
-- Hermes, Jev, Obsidian integration, OpenTelemetry, and Phoenix are target components,
-  not current capabilities.
+- Hermes and Obsidian integration are Target; a decision model is Deferred.
+  OpenTelemetry and Phoenix status is maintained in SYSTEM_DESIGN.md.
 
 ## 4. Architecture Decisions
 
@@ -90,7 +94,7 @@ flowchart TD
   Router --> Reviewer[Optional Claude or Gemini reviewer]
   Executor --> Tools[Bounded DevOps tools]
   Reviewer --> Tools
-  Executor -. advisory request .-> Jev[Jev advisory adapter]
+  Executor -. deferred advisory request .-> Decision[Deferred decision-model adapter]
 
   Host --> Events[Redacted lifecycle events]
   Tools --> Events
@@ -107,8 +111,8 @@ flowchart TD
 ```
 
 OpenClaw owns lifecycle and orchestration. Security Shield remains the authority for
-identity and policy checks. Jev and model reviewers are advisory and cannot grant
-permission.
+identity and policy checks. A Deferred decision model and model reviewers are
+advisory and cannot grant permission.
 
 ### 4.3 Repository layout
 
@@ -124,7 +128,7 @@ integrations/
   git-adapter/             existing bounded read-only Git review
   jira-adapter/            existing requester-approved Jira workflow
   memory-adapter/          target model-safe search/read/propose tools
-  jev-adapter/             target advisory client
+  decision-model-adapter/  deferred advisory client; no Clef on this laptop
   telemetry/               target tracing and evaluation instrumentation
 
 services/
@@ -167,8 +171,13 @@ prompt.
 
 ### 5.2 Hermes learning worker
 
-Hermes is an asynchronous learning and knowledge-curation worker. It must not block the
-Slack response path.
+Hermes is Target: one instance in Bot Mode inside an OrbStack isolated machine,
+with per-bot profiles `personal`, `friday-learner` and optional `researcher`.
+Profiles separate memory, environment, skills and toolsets; isolation must be
+proven before deployment. `friday-learner` is the asynchronous learning and
+knowledge-curation worker, with no terminal, web or delegation and no personal
+memory retention. It reads structured file jobs and writes only inbox candidates.
+It must not block the Slack response path.
 
 Inputs are redacted, structured learning jobs containing only what is needed, such as:
 
@@ -198,21 +207,17 @@ Hermes must not:
 Every output is a candidate with provenance, confidence, scope, expiry or review date,
 and promotion status.
 
-### 5.3 Jev advisory adapter
+### 5.3 Decision-model adapter — Deferred
 
-Jev is optional and advisory. Integrate it only through a narrow adapter after its
-exact API or MCP contract is verified.
+A decision model is Deferred; Clef is not hosted on this laptop. Revisit only
+with separate suitable hardware, a verified subscription-compatible deployment
+and measured benefit against a no-decision-model baseline. Jev’s new API-key
+path is excluded by the subscription-only design.
 
-Potential responsibilities:
-
-- task or incident classification;
-- risk signals;
-- completion or response-quality review;
-- compact second-opinion analysis.
-
-Jev must receive compact redacted input. It cannot authorize a tool call, bypass
-Security Shield, or perform infrastructure mutations. If Jev is unavailable, core
-read-only workflows must continue safely without it.
+Any future adapter is narrow, timeout-bounded, redacted and advisory only. It
+may recommend classification, risk or refusal, but cannot grant permission,
+bypass Security Shield or mutate infrastructure. Core read-only work must remain
+safe without it. See SYSTEM_DESIGN.md for the authoritative decision.
 
 ### 5.4 Memory MCP and memory adapter
 
@@ -281,6 +286,15 @@ Never put prompts, secrets, raw Slack messages, credentials, or unrestricted too
 outputs into spans by default. Exact token and cost fields must be treated as
 unavailable until confirmed from the actual pinned OpenClaw backend runtime.
 
+### 5.7 Documentation tools — Target
+
+Use one fixed tool/workspace per source following the phase-0 branch’s WIP
+`openai-docs-adapter` pattern; the adapter is not present on this branch.
+Accept only a fixed host/path prefix over HTTPS, empty port and userinfo,
+manual redirects capped at three, bounded size/time/content type, classified
+failures and content actually wrapped as untrusted evidence. No generic URL/path
+fetch tool. Exact limits and review findings are in SYSTEM_DESIGN.md and ROADMAP.md.
+
 ## 6. Data and Storage
 
 Keep databases separated by responsibility:
@@ -317,7 +331,7 @@ events.
 3. The router selects a logical role and allowed backend.
 4. Approved memory is retrieved using bounded scope and provenance filters.
 5. The executor investigates through allowlisted read-only tools.
-6. Optional Jev or reviewer analysis supplies advice only.
+6. Deferred decision-model or reviewer analysis, if later approved, supplies advice only.
 7. The response separates evidence, inference, uncertainty, and proposed next action.
 8. OpenTelemetry records redacted lifecycle metadata.
 9. `agent_end` enqueues a redacted learning job without delaying the response.
@@ -352,7 +366,7 @@ The following rules are non-negotiable:
 - Secrets are referenced through approved secret wiring and never stored in knowledge,
   prompts, telemetry, or learning jobs.
 - External provider failure must degrade safely and must not silently widen authority.
-- A reviewer model or Jev can recommend denial but cannot grant permission.
+- A reviewer or Deferred decision model can recommend denial but cannot grant permission.
 
 OPA/Rego is deferred until infrastructure mutation or sufficiently complex centralized
 policy creates a concrete need. Security Shield remains the current policy authority.
@@ -385,7 +399,7 @@ Maintain a versioned evaluation set covering at least:
 - correct refusal of unauthorized operations;
 - memory retrieval relevance and stale-knowledge handling;
 - Jira approval and idempotency behavior;
-- fallback behavior when a provider or Jev is unavailable.
+- fallback behavior when a provider or a future decision model is unavailable.
 
 Track by logical role and concrete model:
 
@@ -476,11 +490,14 @@ approved knowledge through model-facing tools.
 Exit gate: a failed or corrected task can create a candidate, but no candidate becomes
 active without a recorded promotion decision.
 
-### Phase 4 — Jev advisory integration
+### Phase 4 — Decision-model advisory integration — Deferred
 
-- verify the exact Jev protocol and deployment model;
+Clef is not hosted on this laptop; separate hardware and measured benefit are
+required before revisiting. No new AI API key is permitted.
+
+- verify a subscription-compatible decision-model protocol and deployment model;
 - implement a timeout-bounded, redacted adapter;
-- evaluate advisory benefit against a no-Jev baseline;
+- evaluate advisory benefit against a no-decision-model baseline;
 - keep failure non-blocking for existing read-only workflows.
 
 Exit gate: measurable benefit on selected evaluation cases without authority expansion
@@ -495,6 +512,15 @@ or sensitive-data leakage.
 
 Exit gate: provider selection is explainable, evaluated, budget-bounded, and safely
 reversible.
+
+### Phase 6 — Friday SRE investigation — Target
+
+Deliver P6a AWS metadata context, P6b pipeline/build/log reads, P6c Datadog,
+P6d namespace-scoped Kubernetes reads excluding Secrets, then P6e alert
+classification after the stability gate. Everfit approval and reviewed read-only
+credentials are human-owned prerequisites. Use schema-bound tools, redaction,
+truncation and a 15-call cap; never read Terraform state directly or remediate.
+SYSTEM_DESIGN.md defines the boundaries and ROADMAP.md defines stage gates.
 
 ## 13. Acceptance Criteria
 
@@ -549,7 +575,8 @@ These questions must be resolved by evidence during their relevant phase:
 
 - Which exact Hermes project, version, deployment method, and integration contract will
   be used?
-- Which exact Jev product/API/MCP interface is intended, and what data does it retain?
+- Which decision-model contract, separate hardware and measured benefit would
+  justify reopening the Deferred decision?
 - Which OpenClaw lifecycle event exposes reliable model, token, usage, and cost fields?
 - How will approved Obsidian Markdown be indexed and revision-pinned atomically?
 - Which review actions are human-only, and which deterministic promotion checks may be
