@@ -85,6 +85,22 @@ test("instance preparation allows only the fixed OpenAI docs tool and preserves 
       "friday_jira_prepare_ticket",
       toolName,
     ]);
+    // One source list: the Shield allowlist equals tools.alsoAllow and the
+    // Shield's built-in default.
+    const shieldCore = await readFile(path.join(root, "core/security-shield/core.ts"), "utf8");
+    const shieldDefault = [...shieldCore.match(/DEFAULT_ALLOWED_TOOL_NAMES[^=]*= Object\.freeze\(\[([^\]]*)\]/)[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    assert.deepEqual(patch.plugins.entries["friday-security-shield"].config.allowedToolNames, patch.tools.alsoAllow);
+    assert.deepEqual(shieldDefault, patch.tools.alsoAllow);
+    // Codex harness: narrowest native posture, no hosted web search or fetch.
+    assert.deepEqual(patch.plugins.entries.codex, {
+      enabled: true,
+      config: { appServer: { sandbox: "read-only", approvalPolicy: "never", approvalsReviewer: "user" } },
+    });
+    assert.deepEqual(patch.tools.web, { search: { enabled: false }, fetch: { enabled: false } });
+    const codexHome = await readFile(path.join(buildDir, "codex-home.config.toml"), "utf8");
+    for (const line of ["shell_tool = false", "unified_exec = false", 'web_search = "disabled"', 'sandbox_mode = "read-only"']) {
+      assert.ok(codexHome.includes(line), line);
+    }
     assert.deepEqual(patch.tools.deny, [
       "group:automation",
       "group:runtime",

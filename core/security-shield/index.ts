@@ -16,6 +16,7 @@ import {
   finalizeSlackEgress,
   mayGrantRun,
   resolveHookRunId,
+  resolveHookRunIdentity,
   parseSecurityPolicy,
   resolveBoundWorkspaceId,
   resolveFinalizedSlackAuthorizationInput,
@@ -75,6 +76,15 @@ export default definePluginEntry({
     );
     // Grants and gates expire grantTtlMinutes after their latest write, so a
     // run that never emits agent_end cannot keep its capability.
+    // Audit is best-effort: a store failure must never skip a block, cancel or
+    // sanitization decision, because the host continues delivery on hook errors.
+    const record = (entry: Parameters<typeof audit.record>[0]): void => {
+      try {
+        audit.record(entry);
+      } catch {
+        // Ignore: the security decision below still applies.
+      }
+    };
     const authorizedTurns = new PerTurnAuthorizationRegistry(policy.grantTtlMinutes);
     // Tool results are tied to one agent run; a later Slack message cannot
     // borrow a verdict from another conversation or request.
@@ -98,10 +108,10 @@ export default definePluginEntry({
       const decision = authorizeSlack(input, policy);
       if (!decision.applies) return;
       if (!decision.allowed) {
-        audit.record({ decision: "deny", reason: decision.reason, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        record({ decision: "deny", reason: decision.reason, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
         return policy.silentDeny ? { handled: true } : { handled: true, text: "Friday không xử lý yêu cầu này." };
       }
-      audit.record({ decision: "allow", reason: `dispatch:${decision.reason}`, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+      record({ decision: "allow", reason: `dispatch:${decision.reason}`, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
     }, { priority: 10_000, timeoutMs: 1_000 });
 
     // Phase 4: bind an authorized principal to one unique agent run. A channel
@@ -115,7 +125,7 @@ export default definePluginEntry({
       if (mayGrantRun(decision)) {
         const runId = text(recordContext.runId);
         if (!runId) {
-          audit.record({ decision: "deny", reason: "agent-run:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+          record({ decision: "deny", reason: "agent-run:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
           return { outcome: "block", reason: "missing per-turn identity", category: "identity" } as const;
         }
         authorizedTurns.grant({
@@ -125,10 +135,10 @@ export default definePluginEntry({
           channelId: text(input.channelId),
           senderId: text(input.senderId),
         });
-        audit.record({ decision: "allow", reason: "authorized-turn-granted", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        record({ decision: "allow", reason: "authorized-turn-granted", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
         return { outcome: "pass" } as const;
       }
-      audit.record({ decision: "deny", reason: `agent-run:${decision.reason}`, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+      record({ decision: "deny", reason: `agent-run:${decision.reason}`, accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
       return { outcome: "block", reason: "unauthorized Slack principal", category: "identity" } as const;
     }, { priority: 10_000, timeoutMs: 1_000 });
 
@@ -143,7 +153,7 @@ export default definePluginEntry({
       if (!decision.applies) return;
       const runId = text(event.runId);
       if (!mayGrantRun(decision) || !runId) {
-        audit.record({ decision: "deny", reason: !mayGrantRun(decision) ? `reply-dispatch:${decision.reason}` : "reply-dispatch:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        record({ decision: "deny", reason: !mayGrantRun(decision) ? `reply-dispatch:${decision.reason}` : "reply-dispatch:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
         return;
       }
       authorizedTurns.grant({
@@ -153,17 +163,27 @@ export default definePluginEntry({
         channelId: text(input.channelId),
         senderId: text(input.senderId),
       });
-      audit.record({ decision: "allow", reason: "authorized-turn-granted:reply-dispatch", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+      record({ decision: "allow", reason: "authorized-turn-granted:reply-dispatch", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
     }, { priority: 10_000, timeoutMs: 1_000 });
 
     // Phase 5: every friday_* tool call, on any transport, and every Slack tool
-    // call must present a live run-scoped grant created above. Missing, stale
-    // or expired run IDs fail closed.
+    // call must present a live run-scoped grant created above. Slack-scope
+    // calls must also name an allowlisted Friday tool, which covers native
+    // harness tools relayed through this hook (shell, file, fetch, code mode).
+    // Missing, stale, expired or mismatched run IDs fail closed.
     api.on("before_tool_call", async (event, ctx) => {
       const sessionKey = text(ctx.sessionKey);
-      const denial = evaluateToolCall({ toolName: text(event.toolName), sessionKey, runId: resolveHookRunId(event.runId, ctx.runId) }, authorizedTurns);
+      const identity = resolveHookRunIdentity(event.runId, ctx.runId);
+      const denial = evaluateToolCall({
+        toolName: text(event.toolName),
+        sessionKey,
+        runId: identity.runId,
+        runIdMismatch: identity.mismatch,
+        channelId: text(ctx.channelId),
+        allowedToolNames: policy.allowedToolNames,
+      }, authorizedTurns);
       if (!denial) return;
-      audit.record({ decision: "deny", reason: denial.auditReason, channelId: text(ctx.channelId), sessionKey });
+      record({ decision: "deny", reason: denial.auditReason, channelId: text(ctx.channelId), sessionKey });
       return { block: true, blockReason: denial.blockReason };
     }, { priority: 10_000, timeoutMs: 1_000 });
 
@@ -202,26 +222,36 @@ export default definePluginEntry({
           channelId: text(input.channelId),
           senderId: text(input.senderId),
         });
-        audit.record({ decision: "allow", reason: "authorized-turn-granted:prompt-build", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        record({ decision: "allow", reason: "authorized-turn-granted:prompt-build", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
       } else {
-        audit.record({ decision: "deny", reason: !mayGrantRun(decision) ? `prompt-build:${decision.reason}` : "prompt-build:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        record({ decision: "deny", reason: !mayGrantRun(decision) ? `prompt-build:${decision.reason}` : "prompt-build:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
       }
       return { appendSystemContext: SECURITY_SYSTEM_CONTEXT };
     }, { priority: 1_000, timeoutMs: 1_000 });
 
-    // Phase 7: sanitize the final Slack payload as the last egress boundary.
+    // Phase 7: drop internal runtime status payloads (model fallback notices)
+    // before they reach Slack; the text egress below strips them as well.
+    api.on("reply_payload_sending", async (event, ctx) => {
+      const channel = text(event.channel) || text(ctx.channelId);
+      if (channel.toLowerCase() !== "slack" || event.payload?.isFallbackNotice !== true) return;
+      record({ decision: "sanitize", reason: "internal-runtime-notice", channelId: text(ctx.conversationId), sessionKey: text(event.sessionKey) });
+      return { cancel: true, reason: "internal runtime notice" };
+    }, { priority: 10_000, timeoutMs: 1_000 });
+
+    // Phase 8: sanitize the final Slack payload as the last egress boundary.
     api.on("message_sending", async (event, ctx) => {
       if (text(ctx.channelId).toLowerCase() !== "slack") return;
       const runId = text(ctx.runId);
       const gate = verifiedReviewGates.get(runId);
       const { content, reason } = finalizeSlackEgress(event.content, gate);
       if (content === event.content) return;
-      audit.record({
+      record({
         decision: "sanitize",
         reason,
         channelId: text(ctx.conversationId),
         sessionKey: text(ctx.sessionKey),
       });
+      if (!content.trim()) return { cancel: true, cancelReason: "internal runtime notice" };
       return { content };
     }, { priority: 10_000, timeoutMs: 1_000 });
   },

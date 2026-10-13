@@ -1,6 +1,6 @@
 {
   "name": "@friday/security-shield",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "Owner-only exact Slack tuple authorization, persona shielding, and minimal security audit for Friday.",

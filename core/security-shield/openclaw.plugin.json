@@ -2,7 +2,7 @@
   "id": "friday-security-shield",
   "name": "Friday Security Shield",
   "description": "Owner-only exact Slack account/workspace/channel/user tuple authorization, persona shielding, untrusted-input guidance, and minimal audit.",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "activation": { "onStartup": true },
   "contracts": { "tools": [] },
   "configSchema": {
@@ -31,7 +31,12 @@
       "allowedSlackAccountIds": { "type": "array", "items": { "type": "string" } },
       "silentDeny": { "type": "boolean" },
       "auditRetentionDays": { "type": "number", "minimum": 1, "maximum": 90 },
-      "grantTtlMinutes": { "type": "integer", "minimum": 1, "maximum": 60 }
+      "grantTtlMinutes": { "type": "integer", "minimum": 1, "maximum": 60 },
+      "allowedToolNames": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+      }
     }
   }
 }

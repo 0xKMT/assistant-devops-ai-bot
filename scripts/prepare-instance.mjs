@@ -7,6 +7,7 @@ import { access, mkdir, readFile, stat, writeFile, readdir } from "node:fs/promi
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import { parseSlackAccounts } from "./lib/slack-accounts.mjs";
+import { CODEX_HOME_LOCKDOWN_TOML } from "./lib/codex-home-config.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
@@ -241,6 +242,19 @@ if (container) {
 
 const backendPluginIds = backendProfile === "codex" ? ["openai", "codex"] : ["anthropic"];
 const backendPluginEntries = Object.fromEntries(backendPluginIds.map((id) => [id, { enabled: true }]));
+// The Codex harness defaults to YOLO (approval never, danger-full-access) with
+// native shell, file, web search and code mode. Friday pins the narrowest
+// native posture: read-only sandbox without network, no approval prompts.
+// Native shell/app features are disabled in codex-home config.toml as well,
+// and the Security Shield denies every non-allowlisted tool on Slack.
+if (backendProfile === "codex") {
+  backendPluginEntries.codex = {
+    enabled: true,
+    config: {
+      appServer: { sandbox: "read-only", approvalPolicy: "never", approvalsReviewer: "user" },
+    },
+  };
+}
 const modelPolicy = backendProfile === "codex"
   ? { agentRuntime: { id: "codex" } }
   : { agentRuntime: { id: "claude-cli" } };
@@ -254,6 +268,21 @@ const staticSlackChannels = Object.fromEntries(slackAccounts
     replyToMode: "all",
     users: [account.userId],
   }]));
+
+// The only model-facing tools. One list feeds OpenClaw tools.alsoAllow and the
+// Security Shield allowedToolNames so the two policies cannot drift.
+// Slack-facing review requests are routed through the unified gate only.
+// Lower-level context/engine tools remain part of the plugin for future
+// trusted integrations, but are intentionally not model-callable here:
+// otherwise an agent could bypass the canonical verdict and reinterpret
+// baseline findings as merge blockers.
+const fridayModelTools = Object.freeze([
+  "friday_unified_pr_review",
+  "friday_batch_pr_review",
+  "friday_jira_get_context",
+  "friday_jira_prepare_ticket",
+  "friday_openai_latest_model",
+]);
 
 // Phase 7: construct one declarative OpenClaw patch. Tools start from messaging
 // profile, broad write/runtime groups are denied and only Friday operations are
@@ -346,6 +375,7 @@ const patch = {
           allowedSlackBindings: slackAccounts.map(({ accountId, workspaceId, channelId, userId }) => ({ accountId, workspaceId, channelId, userId })),
           silentDeny: true,
           auditRetentionDays: 30,
+          allowedToolNames: [...fridayModelTools],
         },
       },
     },
@@ -354,12 +384,10 @@ const patch = {
     profile: "messaging",
     deny: ["group:automation", "group:runtime", "write", "edit", "apply_patch", "sessions_spawn", "sessions_send", "gateway", "cron", "browser", "canvas"],
     elevated: { enabled: false },
-    // Slack-facing review requests are routed through the unified gate only.
-    // Lower-level context/engine tools remain part of the plugin for future
-    // trusted integrations, but are intentionally not model-callable here:
-    // otherwise an agent could bypass the canonical verdict and reinterpret
-    // baseline findings as merge blockers.
-    alsoAllow: ["friday_unified_pr_review", "friday_batch_pr_review", "friday_jira_get_context", "friday_jira_prepare_ticket", "friday_openai_latest_model"],
+    // Friday has no web search/fetch source tool. search.enabled=false also
+    // disables Codex-native hosted web search in the Codex thread config.
+    web: { search: { enabled: false }, fetch: { enabled: false } },
+    alsoAllow: [...fridayModelTools],
   },
 };
 
@@ -375,6 +403,9 @@ const workspaceBuildDir = path.join(buildDir, "workspace");
 await mkdir(workspaceBuildDir, { recursive: true, mode: 0o700 });
 await mkdir(cacheDir, { recursive: true, mode: 0o700 });
 await writeFile(path.join(buildDir, "openclaw.patch.json"), `${JSON.stringify(patch, null, 2)}\n`, { mode: 0o600 });
+if (backendProfile === "codex") {
+  await writeFile(path.join(buildDir, "codex-home.config.toml"), CODEX_HOME_LOCKDOWN_TOML, { mode: 0o600 });
+}
 
 const templateDir = path.join(root, "templates", "workspace");
 const replacements = new Map([
