@@ -1,12 +1,22 @@
 # Friday · Hermes · Factory Roadmap
 
-Delivery order and gates, as of **2026-10-05**. Architecture and status meanings
+Delivery order and gates, as of **2026-10-05**, progress updated **2026-10-13**. Architecture and status meanings
 come from [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md); repository authority comes from
 [AGENTS.md](../AGENTS.md). Dates are planning windows, not authorization or proof
 of completion. One phase per worktree/PR; Target implementation needs an approved
 phase plan. A date never overrides an unmet gate.
 
 ## Progress at the documentation baseline
+
+**Update 2026-10-06:** the 17 committed Phase 0–1 commits merged to `main`
+(PR #1); the north-star documents merged to `main` (PR #3). Branches were renamed
+to the `0xKMT/` prefix. At that date the `openai-docs-adapter` and trace-repair
+work was not yet on `main`; it has since merged (see the 2026-10-13 update).
+
+**Update 2026-10-13:** PR #4 (phase-0 baseline plan), PR #5 (trace repair and
+trace probe) and PR #6 (OpenAI docs tool with wrapped output and failure
+diagnostics) merged to `main` at `7ceb603`. The table below is the 2026-10-05
+snapshot, corrected where these merges changed it.
 
 The owner’s overall plan reports work on `tripkm-everfit/phase-0-baseline-plan`
 (17 commits ahead of main, work performed September 21–24). This worktree is
@@ -18,10 +28,10 @@ context, not a refreshed remote comparison.
 | --- | --- | --- |
 | P0 | Done: baseline plan, GitNexus isolation, ownership record, compatibility spike | Current source/docs; spike Validated at declaration level; fresh graph identity not established here |
 | P1 observability | Mostly done: isolated container trace pipeline, metadata-only Phoenix, synthetic golden eval | Current source/docs; full live trace/privacy exit gate remains Target |
-| P1 WIP, uncommitted on phase-0 branch | openai-docs-adapter and OpenClaw trace-repair scripts | Target; absent here; do not describe as committed or validated on this branch |
+| P1 openai-docs-adapter and trace repair | openai-docs-adapter and OpenClaw trace-repair scripts | Current on `main` (PR #5, PR #6 at `7ceb603`); Validated by source checks, not Runtime-proven through Slack |
 | October 5 validation snapshot | Six workspace typecheck/build/test green; five Docker-dependent tests unavailable outside Mac | Historical report only; this checkout has five workspaces. Current command results belong in the change report |
 | Phoenix metadata extension | Plan source does not distinguish all committed slices | Current: metadata-retention slice at 743a686; Target: trace probe, conditional patch, full gate and controlled cutover from the metadata plan |
-| North-star instructions | This change introduces authoritative docs and phase-work skill | Target until this documentation change passes checks/review; no Factory hooks or runtime change |
+| North-star instructions | Authoritative docs and phase-work skill | Current on `main` (PR #3, 2026-10-06); no Factory hooks or runtime change |
 
 Existing plans: [P0 baseline](PHASE_0_BASELINE_HYGIENE_PLAN.md),
 [P1 observability](PHASE_1_CONTAINER_OBSERVABILITY_PLAN.md), and
@@ -29,21 +39,40 @@ Existing plans: [P0 baseline](PHASE_0_BASELINE_HYGIENE_PLAN.md),
 Read the relevant design beside each plan. Presence of a plan does not prove that
 all tasks or its operator gates are complete.
 
-### Open review items: phase-0 branch openai-docs-adapter WIP
+### Open review items: openai-docs-adapter
 
-These are supplied review findings, not a fresh review of unavailable WIP.
-They remain **Target repairs** and are not fixed in this documentation change:
+These began as supplied review findings on the uncommitted WIP. Items 1–4 are
+**Resolved in PR #6**; the evidence is cited in source on `main` at `7ceb603`.
+Item 5 remains open.
 
-1. **Medium:** successful tool output is not wrapped with `wrapUntrustedContent`;
+1. **Resolved in PR #6.** `buildOpenAIDocsToolPayload` calls
+   `wrapUntrustedContent` in `integrations/openai-docs-adapter/core.ts`.
+   Original finding, **Medium:** successful tool output is not wrapped with `wrapUntrustedContent`;
    existing tests only prove the wrapper exists. Prove the returned content is
    actually wrapped.
-2. **Low:** the URL gate accepts a non-default port and userinfo. Require
+2. **Resolved in PR #6.** `isAllowedDocsUrl` requires `url.port === ""` and an
+   empty username and password, and is applied to every redirect hop.
+   Original finding, **Low:** the URL gate accepts a non-default port and userinfo. Require
    `url.port === ""` and empty username/password, including redirect targets,
    and amend the Phase 1 plan before implementation.
-3. **Low:** root `check` runs `scripts/test` before workspace builds. A clean
+3. **Resolved in PR #6.** Root `check` in `package.json` runs `npm run build`
+   before the scripts tests. Original finding, **Low:** root `check` runs `scripts/test` before workspace builds. A clean
    checkout may fail on missing `dist/`; fix ordering in its own approved change.
-4. **Low:** redaction lacks `xox`, `ghp_`, `github_pat_`, JWT and `AKIA` patterns.
+4. **Resolved in PR #6.** `integrations/openai-docs-adapter/local-error-log.ts`
+   redacts `xox`, `gh[pousr]_`, `github_pat_`, JWT (`eyJ...`) and `AKIA`/`ASIA`.
+   Original finding, **Low:** redaction lacks `xox`, `ghp_`, `github_pat_`, JWT and `AKIA` patterns.
    Add bounded coverage without placing real secrets in fixtures or docs.
+5. **Open, current defect; must be fixed before Phase 2 adds any documentation
+   source:** `wrapUntrustedContent` in `core/shared/src/untrusted.ts` only
+   truncates; it does not neutralize a `BEGIN UNTRUSTED DATA` /
+   `END UNTRUSTED DATA` marker that appears inside the wrapped content. A
+   fetched document can close the untrusted block early and place text outside
+   it. This is live on `main` for the OpenAI docs tool, so it is a current
+   defect, not only a Phase 2 prerequisite. The fix is planned in Phase 0B
+   Slice A (plan arriving in a separate PR); this change does not implement it. Fix this in its own reviewed
+   change (it alters Security Shield output for every caller), with tests that
+   prove embedded markers cannot end the block. Recorded 2026-10-06 from the
+   Phase 1 Amendment A review; Phase 1 wraps docs output but does not fix this.
 
 ## Phase windows: three coordinated lanes
 
@@ -76,7 +105,7 @@ human permission requests may proceed without implying product readiness.
 
 | Stage | Gate to continue | Evidence state as of Oct 5 |
 | --- | --- | --- |
-| Weeks 1–2 / finish P0–P1, Hermes preflight, Dev v1 | P0–P1 branch merged; Docker-dependent tests green on Mac; P1 runtime proof through Slack; both OrbStack mount and Hermes per-bot checks have results | Open: source progress exists; merge, complete live proof and isolation gates not established by this change |
+| Weeks 1–2 / finish P0–P1, Hermes preflight, Dev v1 | P0–P1 branch merged; Docker-dependent tests green on Mac; P1 runtime proof through Slack; both OrbStack mount and Hermes per-bot checks have results | Partly met (2026-10-13): P0–P1 source merged to `main` (PR #1, #4–#6); Docker-dependent tests on the Mac, live Slack runtime proof, OrbStack mount and Hermes isolation checks open |
 | Weeks 3–4 / P2, M1 | Friday can read approved but cannot modify it; personal bot stable for one week | Target, not met |
 | Weeks 5–7 / P3, M2–M3, Infra v1 | No candidate self-activates; Infra Factory completes one real change | Target, not met |
 | Weeks 8–9 / P6a, Infra v2 | Everfit approves role; IAM Access Analyzer reports no data-read permissions | Target, not met |
@@ -100,6 +129,7 @@ synthetic eval does not establish live model quality.
 | P4 decision model / Clef | Separate suitable machine, proven deployment and measured benefit versus no-model baseline; no laptop hosting or new AI API key | Deferred |
 | P5 cross-review | Claude Max budget and measured high-risk review benefit; approved routing/rollback plan | Deferred |
 | Additional thread/plan/drift/cost/postmortem/ADR/on-call features | Approved phase plan and read-only/approval boundaries; phase allocation unresolved except Friday brief window above | Target, unscheduled |
+| P6f deploy watch | Stable P6b–P6c, approved in-gateway scheduling and per-watch call/cost caps; read-only, no rollback; depends on P6 AWS/pipeline permissions, which the owner has deferred | Target, unscheduled |
 | Vector DB, LangGraph, OPA, LiteLLM, second always-on machine | Conditions in SYSTEM_DESIGN decisions/operations; no permission expansion | Deferred |
 
 ## Assumptions and assignment

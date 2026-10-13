@@ -72,6 +72,7 @@ runtime proof is established by this documentation change.
 | Friday / approved knowledge | Cite approved runbooks, ADRs and incidents through bounded memory search/read | Target / P2 |
 | Friday / learning | Structured redacted jobs, candidates and weekly human approval | Target / P3 |
 | Friday / SRE | Read-only infrastructure context and incident diagnosis | Target / P6a–P6e |
+| Friday / deploy watch | Time-bounded, read-only watch of an allowlisted pipeline or service after a deploy; reports status, error rate and latency in the Slack thread; never rolls back | Target / P6f after P6b–P6c |
 | Friday / thread summaries, brief, plan/drift/cost explanation, postmortem/ADR/on-call drafts | Read evidence and propose; approved external writes only; no remediation | Target / future extension; exact phase except brief is open |
 | Personal agent | One pinned Hermes in Bot Mode, profiles personal, friday-learner and optional researcher; Telegram owner-only, separate memory/skills/environment per profile | Target / M1–M4 |
 | Factory | Claude Code + Codex through Orca; builds on existing Superpowers design → plan → subagent-driven implementation → review | Target / Dev v1 → Infra v1/v2 → operations |
@@ -214,6 +215,19 @@ boundary against malicious code.
 4. Respond with linked evidence, inference, uncertainty and proposed next steps.
 5. Human remediates; Jira/postmortem drafts still need approval before creation.
 
+### Deploy watch — Target / P6f
+
+1. Owner asks in a thread, for example “@Friday watch pipeline X for 15 minutes”.
+2. Shield authorizes; only allowlisted pipelines/services and a capped watch
+   duration and polling interval (values set in the P6f plan) are accepted.
+3. Friday polls with the existing P6b pipeline/log and P6c Datadog tools; every
+   poll counts toward a per-watch tool-call budget and uses bounded windows.
+4. Friday posts immediately when an agreed threshold is breached, and a short
+   summary when the watch ends, each with evidence links and uncertainty.
+5. The human decides whether to roll back; Friday has no rollback, retry or
+   restart tool. The scheduling mechanism must live inside the existing gateway
+   (no second control plane) and is an open question for the P6f plan.
+
 ## 7. Security boundaries and permissions
 
 **Current decision:** Security Shield is the authorization authority; models,
@@ -289,6 +303,7 @@ Everfit must approve laptop-based access before any credentials are created.
 | P6c | Datadog logs, monitors, traces and metrics | Read-scoped API/application keys | Target |
 | P6d | Kubernetes namespace-scoped reads, no Secrets | Reviewed ServiceAccount RBAC | Target |
 | P6e | Automatic alert classification | Stable Q&A and accepted alert principal in Shield | Target |
+| P6f | Time-bounded deploy watch reported in Slack | Stable P6b–P6c, approved in-gateway scheduling, per-watch call and cost caps | Target |
 
 The system source requires stable 6a–6c for 6e; the plan schedules 6e after
 6a–6d and at least one month of stable Q&A. Use the later, stricter roadmap
@@ -304,6 +319,9 @@ gate; it does not authorize a new alert source before a phase plan.
 | logs_query | Logs StartQuery / GetQueryResults | Templates, default one-hour window | Target |
 | datadog_logs/monitors/traces/metrics | Read-scoped Datadog API | Time window, result and rate caps specified in plan | Target |
 | k8s_inspect | Kubernetes get/list/watch excluding Secrets | Allowlisted namespaces | Target |
+
+Lessons from P6 incidents go through the P3 approval gate; Friday never writes
+its own lessons file.
 
 Redact and truncate every output before the model; cap all investigation at
 15 calls. No raw aws/kubectl/shell tool. Plan artifacts replace state reads.
@@ -480,6 +498,8 @@ may widen Friday authority or imply new AI API keys now.
 - **Target, human:** obtain Everfit approval for PR data processing/subscription
   use and all AWS/Datadog/Kubernetes access; verify OrbStack licensing.
 - **Target:** check AWS Config/Resource Explorer enablement and costs.
+- **Target:** choose a P6f scheduling mechanism inside the gateway and set watch
+  duration, polling interval, thresholds and call caps.
 - **Target:** review sample IAM with Access Analyzer, resource scopes and remaining
   data-bearing actions; verify exact Datadog read scopes and Kubernetes RBAC/token
   rotation.
