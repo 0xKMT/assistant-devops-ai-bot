@@ -45,7 +45,8 @@
       "slug": "example-org/platform-infrastructure",
       "root": "/absolute/path/to/platform-infrastructure",
       "remoteUrl": "https://github.com/example-org/platform-infrastructure.git",
-      "baseBranch": "main"
+      "baseBranch": "main",
+      "kubernetesVersion": "1.30.0"
     }
   ],
   "binaries": {

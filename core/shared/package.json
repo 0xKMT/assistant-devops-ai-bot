@@ -12,6 +12,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "check": "npm run typecheck"
+    "test": "tsx --test src/*.test.ts",
+    "check": "npm run typecheck && npm run test"
   }
 }

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GitOpsReviewParams } from "@friday/shared";
 import { capText, preparePullRequest, redact, type PullRequestSnapshot } from "./core.js";
-import { reviewRuntime } from "./runtime-config.js";
+import { resolveConfiguredRepository, reviewRuntime } from "./runtime-config.js";
 import { parseAddedLinesFromUnifiedDiff } from "./review-policy.js";
 import { classifyFindingRelevance, resolveReviewIntent, type FindingRelevance, type IntentSpec } from "./review-intent.js";
 import {
@@ -594,6 +594,9 @@ export async function reviewGitOpsPullRequest(
   // When routed through Unified Review, reuse its validated snapshot instead
   // of repeating the expensive bounded Git/GitHub preparation phase.
   const snapshot = preparedSnapshot ?? await preparePullRequest(params.pullRequestUrl);
+  // Resolve the version from the live allowlist, never from the snapshot:
+  // cached snapshots predate per-repository versions and carry none.
+  const { kubernetesVersion } = resolveConfiguredRepository(snapshot.repository);
   const intent = resolveReviewIntent(snapshot);
   const changedFiles = new Set(snapshot.changedFiles.map((entry) => normalizeReviewPath(entry.path)).filter(isGitOpsPath));
   const addedLines = parseAddedLinesFromUnifiedDiff(snapshot.terraformDiff);
@@ -657,7 +660,7 @@ export async function reviewGitOpsPullRequest(
       tool: "friday-gitops-policy", required: true, status: "success", durationMs: Date.now() - policyStarted, findings: policyFindings.length,
     }];
 
-    // Phase 4: lint/render Helm head and base with fixed Kubernetes version,
+    // Phase 4: lint/render Helm head and base with the repository's Kubernetes version,
     // recording regressions separately from failures already in the baseline.
     const helmAvailable = await access(helm).then(() => true).catch(() => false);
     const rendered: Array<{ unit: string; file: string }> = [];
@@ -684,9 +687,9 @@ export async function reviewGitOpsPullRequest(
         findings.push(...consumption.findings);
       }
 
-      const lint = await runFixedProcess(helm, ["lint", chartPath, "--quiet", "--kube-version", "1.30.0", ...valuesArgs], snapshotRoot);
+      const lint = await runFixedProcess(helm, ["lint", chartPath, "--quiet", "--kube-version", kubernetesVersion, ...valuesArgs], snapshotRoot);
       const baseLint = baseRunnable
-        ? await runFixedProcess(helm, ["lint", baseChartPath, "--quiet", "--kube-version", "1.30.0", ...baseValuesArgs], baseRoot)
+        ? await runFixedProcess(helm, ["lint", baseChartPath, "--quiet", "--kube-version", kubernetesVersion, ...baseValuesArgs], baseRoot)
         : undefined;
       if (lint.exitCode !== 0) {
         helmError ||= safeText(lint.stderr || lint.stdout || "Helm lint failed.");
@@ -703,9 +706,9 @@ export async function reviewGitOpsPullRequest(
         renderComparisons.push({ unit: unit.id, status: baselineFailure ? "baseline-failure" : "regression", baseRendered: false, headRendered: false });
         continue;
       }
-      const template = await runFixedProcess(helm, ["template", "friday-review", chartPath, "--include-crds", "--skip-tests", "--kube-version", "1.30.0", ...valuesArgs], snapshotRoot);
+      const template = await runFixedProcess(helm, ["template", "friday-review", chartPath, "--include-crds", "--skip-tests", "--kube-version", kubernetesVersion, ...valuesArgs], snapshotRoot);
       const baseTemplate = baseRunnable
-        ? await runFixedProcess(helm, ["template", "friday-review", baseChartPath, "--include-crds", "--skip-tests", "--kube-version", "1.30.0", ...baseValuesArgs], baseRoot)
+        ? await runFixedProcess(helm, ["template", "friday-review", baseChartPath, "--include-crds", "--skip-tests", "--kube-version", kubernetesVersion, ...baseValuesArgs], baseRoot)
         : undefined;
       if (template.exitCode !== 0 || !template.stdout.trim()) {
         helmError ||= safeText(template.stderr || "Helm produced no rendered manifest.");
@@ -771,7 +774,7 @@ export async function reviewGitOpsPullRequest(
     let kubeError = "";
     if (kubeconformAvailable) {
       for (const unit of rendered) {
-        const result = await runFixedProcess(kubeconform, ["-output", "json", "-strict", "-ignore-missing-schemas", "-kubernetes-version", "1.30.0", "-cache", kubeconformCache, unit.file], tempRoot);
+        const result = await runFixedProcess(kubeconform, ["-output", "json", "-strict", "-ignore-missing-schemas", "-kubernetes-version", kubernetesVersion, "-cache", kubeconformCache, unit.file], tempRoot);
         if (result.exitCode !== 0) kubeError ||= safeText(result.stderr || "Kubeconform failed.");
         if (result.stdout) findings.push(...parseKubeconformJson(result.stdout, unit.unit));
       }

@@ -4,7 +4,8 @@
       "slug": "example/platform-infrastructure",
       "root": "/srv/friday/repos/platform-infrastructure",
       "remoteUrl": "https://github.com/example/platform-infrastructure.git",
-      "baseBranch": "main"
+      "baseBranch": "main",
+      "kubernetesVersion": "1.30.0"
     }
   ],
   "binaries": {

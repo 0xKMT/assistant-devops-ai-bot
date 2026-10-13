@@ -44,7 +44,7 @@ all tasks or its operator gates are complete.
 
 These began as supplied review findings on the uncommitted WIP. Items 1–4 are
 **Resolved in PR #6**; the evidence is cited in source on `main` at `7ceb603`.
-Item 5 remains open.
+Item 5 is **Resolved in Phase 0B Slice A (part 1)**.
 
 1. **Resolved in PR #6.** `buildOpenAIDocsToolPayload` calls
    `wrapUntrustedContent` in `integrations/openai-docs-adapter/core.ts`.
@@ -63,17 +63,23 @@ Item 5 remains open.
    redacts `xox`, `gh[pousr]_`, `github_pat_`, JWT (`eyJ...`) and `AKIA`/`ASIA`.
    Original finding, **Low:** redaction lacks `xox`, `ghp_`, `github_pat_`, JWT and `AKIA` patterns.
    Add bounded coverage without placing real secrets in fixtures or docs.
-5. **Open, current defect; must be fixed before Phase 2 adds any documentation
-   source:** `wrapUntrustedContent` in `core/shared/src/untrusted.ts` only
-   truncates; it does not neutralize a `BEGIN UNTRUSTED DATA` /
-   `END UNTRUSTED DATA` marker that appears inside the wrapped content. A
-   fetched document can close the untrusted block early and place text outside
-   it. This is live on `main` for the OpenAI docs tool, so it is a current
-   defect, not only a Phase 2 prerequisite. The fix is planned in Phase 0B
-   Slice A (plan arriving in a separate PR); this change does not implement it. Fix this in its own reviewed
-   change (it alters Security Shield output for every caller), with tests that
-   prove embedded markers cannot end the block. Recorded 2026-10-06 from the
-   Phase 1 Amendment A review; Phase 1 wraps docs output but does not fix this.
+5. **Resolved in Phase 0B Slice A (part 1).** `wrapUntrustedContent` in
+   `core/shared/src/untrusted.ts` prefixes `[quoted] ` to any content line
+   whose leading words are `BEGIN UNTRUSTED DATA` or `END UNTRUSTED DATA`
+   as whole words, after NFKC normalization and folding of common Cyrillic
+   and Greek look-alikes. Markup tags, spacing, punctuation, invisible, bidi
+   and combining characters are ignored; classification is linear-time, and
+   every line break (including `\r`, `\v`, `\f`, NEL,
+   U+2028 and U+2029) starts a new line. Truncation still applies, never
+   leaves a bare marker as the cut last line, and other
+   content is byte-identical. Evidence: `core/shared/src/untrusted.test.ts`,
+   which now runs in the shared workspace `check`. Validated by unit tests,
+   not runtime-proven; look-alike folding covers a fixed set, not every
+   Unicode confusable.
+   Original finding, **Open, current defect:** `wrapUntrustedContent` only
+   truncated and did not neutralize an embedded marker, so a fetched document
+   could close the untrusted block early and place text outside it. Recorded
+   2026-10-06 from the Phase 1 Amendment A review.
 
 ## Phase windows: three coordinated lanes
 
