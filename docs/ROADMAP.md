@@ -34,8 +34,9 @@ context, not a refreshed remote comparison.
 | North-star instructions | Authoritative docs and phase-work skill | Current on `main` (PR #3, 2026-10-06); no Factory hooks or runtime change |
 
 Existing plans: [P0 baseline](PHASE_0_BASELINE_HYGIENE_PLAN.md),
-[P1 observability](PHASE_1_CONTAINER_OBSERVABILITY_PLAN.md), and
-[P1 metadata/trace continuity](PHASE_1_PHOENIX_METADATA_TRACE_PLAN.md).
+[P1 observability](PHASE_1_CONTAINER_OBSERVABILITY_PLAN.md),
+[P1 metadata/trace continuity](PHASE_1_PHOENIX_METADATA_TRACE_PLAN.md), and
+[P0B foundation](PHASE_0B_FOUNDATION_PLAN.md) (Target, awaiting approval).
 Read the relevant design beside each plan. Presence of a plan does not prove that
 all tasks or its operator gates are complete.
 
