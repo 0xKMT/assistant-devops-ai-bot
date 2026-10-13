@@ -8,6 +8,7 @@
     "core/shared",
     "core/security-shield",
     "integrations/git-adapter",
+    "integrations/openai-docs-adapter",
     "integrations/jira-adapter",
     "integrations/slack-recovery"
   ],
@@ -35,7 +36,7 @@
     "prepare:instance": "node scripts/prepare-instance.mjs",
     "prepare:instance:check": "node scripts/prepare-instance.mjs --check",
     "install:plugins": "node scripts/install-plugins.mjs",
-    "check": "npm run audit:portability && npm run audit:architecture && node --test compat/slack/test/*.test.mjs scripts/test/*.test.mjs && npm run check --workspaces --if-present",
+    "check": "npm run audit:portability && npm run audit:architecture && npm run build && node --test compat/slack/test/*.test.mjs scripts/test/*.test.mjs && npm run check --workspaces --if-present",
     "test": "npm run check"
   },
   "devDependencies": {

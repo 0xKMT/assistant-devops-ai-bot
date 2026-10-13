@@ -18,6 +18,9 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@friday/shared": "0.3.0"
+  },
   "openclaw": {
     "extensions": ["./dist/index.js"]
   },

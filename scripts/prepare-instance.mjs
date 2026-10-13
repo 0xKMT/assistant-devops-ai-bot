@@ -291,7 +291,7 @@ const patch = {
   },
   plugins: {
     ...(container ? { load: { paths: ["/opt/friday/plugins/slack-project/node_modules/@openclaw/slack"] } } : {}),
-    allow: [...backendPluginIds, "slack", "friday-git-adapter", "friday-jira-adapter", "friday-security-shield"],
+    allow: [...backendPluginIds, "slack", "friday-git-adapter", "friday-jira-adapter", "friday-openai-docs-adapter", "friday-security-shield"],
     entries: {
       ...backendPluginEntries,
       slack: { enabled: true },
@@ -331,6 +331,7 @@ const patch = {
           },
         },
       },
+      "friday-openai-docs-adapter": { enabled: true },
       "friday-security-shield": {
         enabled: true,
         hooks: { allowPromptInjection: true, allowConversationAccess: true },
@@ -352,7 +353,7 @@ const patch = {
     // trusted integrations, but are intentionally not model-callable here:
     // otherwise an agent could bypass the canonical verdict and reinterpret
     // baseline findings as merge blockers.
-    alsoAllow: ["friday_unified_pr_review", "friday_batch_pr_review", "friday_jira_get_context", "friday_jira_prepare_ticket"],
+    alsoAllow: ["friday_unified_pr_review", "friday_batch_pr_review", "friday_jira_get_context", "friday_jira_prepare_ticket", "friday_openai_latest_model"],
   },
 };
 

@@ -9,6 +9,7 @@ COPY types ./types
 RUN npm ci \
     && npm run build --workspace @friday/git-adapter \
     && npm run build --workspace @friday/jira-adapter \
+    && npm run build --workspace @friday/openai-docs-adapter \
     && npm run build --workspace @friday/security-shield
 
 FROM ghcr.io/openclaw/openclaw:2026.7.1-2@sha256:8789721d2e9b24b780a1504b56deb4c6bd5c7dbf96a1dd117e7c45c2ed72c8ac
@@ -91,6 +92,7 @@ RUN HOME=/tmp/friday-diagnostics-home OPENCLAW_STATE_DIR=/tmp/friday-diagnostics
 COPY . /opt/friday/source
 COPY --from=friday-build /src/integrations/git-adapter/dist /opt/friday/source/integrations/git-adapter/dist
 COPY --from=friday-build /src/integrations/jira-adapter/dist /opt/friday/source/integrations/jira-adapter/dist
+COPY --from=friday-build /src/integrations/openai-docs-adapter/dist /opt/friday/source/integrations/openai-docs-adapter/dist
 COPY --from=friday-build /src/core/security-shield/dist /opt/friday/source/core/security-shield/dist
 COPY container/entrypoint.sh /opt/friday/bin/entrypoint
 RUN node /opt/friday/source/scripts/openclaw-trace-fix.mjs --apply \

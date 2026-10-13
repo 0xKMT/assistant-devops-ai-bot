@@ -165,6 +165,66 @@ response appear in one Phoenix trace without protected content.
 **Runtime-proven:** not yet; only a controlled configured Friday turn can
 establish that state. The golden fixtures do not evaluate a live model.
 
+### OpenAI model-document lookup and failure diagnostics
+
+**Current (runtime):** the running gateway and Collector have not been switched
+to this source change. Do not infer runtime behavior from the tests or image
+build below. **Validated (source/build):** the fixed-endpoint adapter, local
+failure logger, and synthetic post-Collector privacy check have passed their
+focused checks. **Target:** after a separate
+cutover approval, `friday_openai_latest_model` fetches only
+`https://developers.openai.com/api/docs/guides/latest-model.md`. A successful
+reply includes that source URL and its retrieval time. A failed fetch reports
+that current information could not be verified; it never falls back to a
+previous or cached document.
+
+On failure only, the gateway writes a secret-redacted diagnostic record to
+`/tmp/friday-error-diagnostics/errors.ndjson` on the existing `/tmp` tmpfs.
+Successes create no records. The file is limited to 100 records and 1 MiB,
+each record is at most 16 KiB, and records older than 24 hours are pruned at
+startup, on append, and every five minutes. The directory/file modes are
+`0700`/`0600`; `gateway_stop` removes the file. The local record may contain an
+exception message/stack or a bounded excerpt from an HTTP error response. Keep
+it local: do not paste its contents into Slack, Phoenix, tickets, or an agent
+conversation.
+
+Phoenix remains metadata-only. The pinned OpenClaw trace patches
+(`scripts/openclaw-*-fix.mjs`, applied at image build) map a docs-fetch tool
+failure to its fixed category and code. For a failure, the Collector may retain only
+the allowlisted `openclaw.errorCategory`, finite `openclaw.errorCode`, and
+integer `http.response.status_code` in the range 400–599, when present. It
+clears raw status messages and exception events. Prompts, Slack text, request
+headers, response bodies/excerpts, exception messages/stacks, and local-log
+sentinels must not appear in Phoenix; the docs span's content is empty. A
+synthetic Collector pass validates filtering, not the active gateway or a live
+Phoenix trace. **Runtime-proven:** not yet; it requires the separately
+approved controlled owner-only Slack check and the trace-continuity gate below.
+
+Run these source/build checks from the repository root before requesting a
+cutover:
+
+```bash
+npm --workspace @friday/openai-docs-adapter test
+npm run typecheck --workspace @friday/openai-docs-adapter
+npm run build
+node --test scripts/test/openai-docs-routing.test.mjs scripts/test/openclaw-trace-fix.test.mjs scripts/test/collector-privacy.test.mjs
+docker build -t friday:phase1-error-log-test .
+docker run --rm --network none --entrypoint node friday:phase1-error-log-test -e 'import("/opt/friday/source/integrations/openai-docs-adapter/dist/local-error-log.js").then((m)=>{if(typeof m.appendLocalErrorRecord!=="function")process.exit(1)})'
+```
+
+Only after an approved cutover, the configured owner may inspect the local
+failure file from a private terminal:
+
+```bash
+docker exec -it friday-friday-gateway-1 sed -n '1,100p' /tmp/friday-error-diagnostics/errors.ndjson
+docker exec friday-friday-gateway-1 stat -c '%a %s' /tmp/friday-error-diagnostics/errors.ndjson
+```
+
+The first command can display raw local error details; never copy its output
+outside the owner's local terminal. The second reports only mode and byte
+size; expect mode `600` and no more than `1048576` bytes. Do not create a
+persistent volume or copy this file during backup or rollback.
+
 Complete the ordinary `container:setup --apply` and acceptance procedure above
 separately before opting in. The observability overlay does not initialize
 credentials, install into persistent Friday state, or authorize a requester.

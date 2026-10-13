@@ -1,0 +1,24 @@
+{
+  "id": "friday-openai-docs-adapter",
+  "name": "Friday OpenAI Docs Adapter",
+  "description": "Reads the fixed official OpenAI latest-model guide as untrusted evidence for Friday.",
+  "version": "1.0.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "friday_openai_latest_model"
+    ]
+  },
+  "toolMetadata": {
+    "friday_openai_latest_model": {
+      "optional": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
