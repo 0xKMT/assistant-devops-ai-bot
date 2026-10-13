@@ -1,0 +1,5 @@
+FROM friday:phase1-error-log-test
+USER root
+COPY scripts/openclaw-trace-probe.mjs /tmp/openclaw-trace-probe.mjs
+RUN node /tmp/openclaw-trace-probe.mjs --apply && rm /tmp/openclaw-trace-probe.mjs
+USER node

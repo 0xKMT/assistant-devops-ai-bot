@@ -153,6 +153,14 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
             ],
           }, {
             traceId,
+            spanId: "cccccccccccccccc",
+            name: "openclaw.model.usage",
+            attributes: [
+              attribute("gen_ai.system", "openai"),
+              attribute("gen_ai.request.model", "gpt-5.6-luna"),
+            ],
+          }, {
+            traceId,
             spanId: "bbbbbbbbbbbbbbbb",
             name: "openclaw.model.call",
             attributes: [
@@ -205,6 +213,7 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     assert.match(output, /Parent ID\s+: 7777777777777777\n\s+ID\s+: 8888888888888888/);
     assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-luna\)/);
     assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-terra\)/);
+    assert.equal(output.match(/gen_ai\.request\.model: Str\(openai\/gpt-5\.6-luna\)/g)?.length, 2);
     assert.match(output, /gen_ai\.provider\.name: Str\(openai\)/);
     assert.match(output, /openclaw\.model_call\.prompt\.input_messages_count: Int\(2\)/);
     assert.match(output, /openclaw\.model_call\.prompt\.input_messages_chars: Int\(123\)/);
