@@ -93,6 +93,10 @@ COPY --from=friday-build /src/integrations/git-adapter/dist /opt/friday/source/i
 COPY --from=friday-build /src/integrations/jira-adapter/dist /opt/friday/source/integrations/jira-adapter/dist
 COPY --from=friday-build /src/core/security-shield/dist /opt/friday/source/core/security-shield/dist
 COPY container/entrypoint.sh /opt/friday/bin/entrypoint
+RUN node /opt/friday/source/scripts/openclaw-trace-fix.mjs --apply \
+    && node /opt/friday/source/scripts/openclaw-ingress-trace-fix.mjs --apply \
+    && node /opt/friday/source/scripts/openclaw-runner-usage-trace-fix.mjs --apply \
+    && node /opt/friday/source/scripts/openclaw-diagnostics-usage-fix.mjs --apply
 RUN chmod 0755 /opt/friday/bin/entrypoint \
     && chown -R root:root /opt/friday \
     && chmod -R a-w /opt/friday

@@ -1,0 +1,4 @@
+services:
+  friday-gateway:
+    image: friday:trace-probe
+    build: !reset null
