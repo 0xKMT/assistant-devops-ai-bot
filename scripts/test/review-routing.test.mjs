@@ -9,7 +9,7 @@ const gitAdapter = await readFile(new URL("../../integrations/git-adapter/index.
 const readme = await readFile(new URL("../../README.md", import.meta.url), "utf8");
 
 test("Slack review routing exposes only the canonical unified review tools", () => {
-  assert.match(generator, /alsoAllow: \["friday_unified_pr_review", "friday_batch_pr_review", "friday_jira_get_context", "friday_jira_prepare_ticket"\]/);
+  assert.match(generator, /alsoAllow: \["friday_unified_pr_review", "friday_batch_pr_review", "friday_jira_get_context", "friday_jira_prepare_ticket", "friday_openai_latest_model"\]/);
   assert.doesNotMatch(generator, /alsoAllow: \[[^\]]*friday_gitops_review/);
   assert.match(agentPolicy, /The tool gate is authoritative/);
   assert.match(agentPolicy, /Never upgrade a PASS\/WARN to BLOCK or NEEDS_HUMAN/);

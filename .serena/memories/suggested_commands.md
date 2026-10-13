@@ -2,7 +2,7 @@
 
 - Install reproducibly: `npm ci`.
 - Full validation: `npm test` (alias of root `npm run check`).
-- Root check sequence: portability audit, architecture audit, Node tests in `compat/slack/test/*.test.mjs` and `scripts/test/*.test.mjs`, then every workspace `check`.
+- Root check sequence: portability audit, architecture audit, build all workspaces, Node tests in `compat/slack/test/*.test.mjs` and `scripts/test/*.test.mjs`, then every workspace `check`. Root tests need built `dist/` bundles, so run `npm run build` first when invoking them directly.
 - Typecheck all workspaces: `npm run typecheck`.
 - Build all packages: `npm run build`.
 - Run one workspace test suite: `npm --workspace @friday/git-adapter test` (substitute `@friday/security-shield`, `@friday/jira-adapter`, or `@friday/slack-recovery`); shared has typecheck/check but no test script.

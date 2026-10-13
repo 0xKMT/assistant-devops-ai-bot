@@ -83,6 +83,7 @@ await migrateLegacyJiraConfig();
 for (const pluginPath of [
   path.join(sourceRoot, "integrations/git-adapter"),
   path.join(sourceRoot, "integrations/jira-adapter"),
+  path.join(sourceRoot, "integrations/openai-docs-adapter"),
   path.join(sourceRoot, "core/security-shield"),
 ]) {
   await access(path.join(pluginPath, "dist", "index.js"));

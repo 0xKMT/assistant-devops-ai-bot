@@ -6,4 +6,5 @@ export default defineConfig({
   removeNodeProtocol: false,
   sourcemap: false,
   minify: false,
+  noExternal: ["@friday/shared"],
 });

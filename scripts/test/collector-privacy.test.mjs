@@ -70,6 +70,10 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
               attribute("gen_ai.usage.input_tokens", "FRIDAY_SENTINEL_TOKEN_AS_TEXT"),
               integerAttribute("gen_ai.usage.output_tokens", 999),
               attribute("gen_ai.operation.name", "FRIDAY_SENTINEL_OPERATION"),
+              attribute("llm.provider", "FRIDAY_SENTINEL_LLM_PROVIDER"),
+              attribute("llm.model_name", "FRIDAY_SENTINEL_LLM_MODEL"),
+              attribute("llm.system", "FRIDAY_SENTINEL_LLM_SYSTEM"),
+              attribute("llm.token_count.prompt", "FRIDAY_SENTINEL_LLM_TOKENS"),
               attribute("secret.span", "FRIDAY_SENTINEL_SPAN"),
             ],
             events: [{ name: "FRIDAY_SENTINEL_EVENT", attributes: [attribute("secret.event", "FRIDAY_SENTINEL_EVENT_ATTRIBUTE")] }],
@@ -171,6 +175,75 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
               attribute("openclaw.errorCategory", "timeout"),
             ],
             status: { code: 2, message: "FRIDAY_SENTINEL_RAW_STATUS_TWO" },
+          }, {
+            traceId,
+            spanId: "dddddddddddddddd",
+            name: "openclaw.model.call",
+            attributes: [
+              attribute("gen_ai.system", "openai"),
+              attribute("gen_ai.request.model", "openai/gpt-5.6-sol"),
+            ],
+          }, {
+            traceId,
+            spanId: "eeeeeeeeeeeeeeee",
+            parentSpanId: "8888888888888888",
+            name: "openclaw.tool.execution",
+            attributes: [
+              attribute("openclaw.errorCategory", "not_found"),
+              attribute("openclaw.errorCode", "DOCS_NOT_FOUND"),
+              integerAttribute("http.response.status_code", 404),
+              attribute("exception.message", "FRIDAY_SENTINEL_LOCAL_MESSAGE"),
+              attribute("exception.stacktrace", "FRIDAY_SENTINEL_LOCAL_STACK"),
+              attribute("http.response.body", "FRIDAY_SENTINEL_RESPONSE_EXCERPT"),
+              attribute("http.request.header.authorization", "FRIDAY_SENTINEL_HEADER"),
+              attribute("gen_ai.input.messages", "FRIDAY_SENTINEL_PROMPT"),
+            ],
+            events: [{ name: "exception", attributes: [attribute("exception.message", "FRIDAY_SENTINEL_EVENT_MESSAGE")] }],
+            status: { code: 2, message: "FRIDAY_SENTINEL_RAW_STATUS" },
+          }, {
+            traceId,
+            spanId: "ffffffffffffffff",
+            parentSpanId: "eeeeeeeeeeeeeeee",
+            name: "openclaw.model.call",
+            attributes: [
+              attribute("gen_ai.system", "openai"),
+              attribute("openclaw.errorCategory", "network"),
+              attribute("openclaw.errorCode", "DOCS_NETWORK"),
+              integerAttribute("http.response.status_code", 503),
+              attribute("exception.message", "FRIDAY_SENTINEL_MODEL_ERROR"),
+              attribute("http.response.body", "FRIDAY_SENTINEL_MODEL_RESPONSE"),
+            ],
+            events: [{ name: "exception", attributes: [attribute("exception.stacktrace", "FRIDAY_SENTINEL_MODEL_EVENT_STACK")] }],
+            status: { code: 2, message: "FRIDAY_SENTINEL_MODEL_RAW_STATUS" },
+          }, {
+            traceId,
+            spanId: "1212121212121212",
+            name: "openclaw.tool.execution",
+            attributes: [
+              attribute("openclaw.errorCategory", "unreviewed-category"),
+              attribute("openclaw.errorCode", "UNREVIEWED_CODE"),
+              integerAttribute("http.response.status_code", 200),
+            ],
+            status: { code: 2, message: "FRIDAY_SENTINEL_INVALID_STATUS" },
+          }, {
+            traceId,
+            spanId: "1414141414141414",
+            name: "openclaw.tool.execution",
+            attributes: [attribute("openclaw.toolName", "friday_jira_prepare_ticket")],
+          }, {
+            traceId,
+            spanId: "1515151515151515",
+            name: "openclaw.tool.execution",
+            attributes: [attribute("openclaw.toolName", "friday_openai_latest_model")],
+          }, {
+            traceId,
+            spanId: "1313131313131313",
+            name: "openclaw.model.call",
+            attributes: [
+              attribute("openclaw.errorCategory", "not_found"),
+              attribute("openclaw.errorCode", "DOCS_NOT_FOUND"),
+              attribute("http.response.status_code", "404"),
+            ],
           }],
         }],
       }],
@@ -209,6 +282,10 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-sol\)/);
     assert.match(output, /openclaw\.errorCategory: Str\(timeout\)/);
     assert.match(output, /openclaw\.errorCode: Str\(AUTH_REQUIRED\)/);
+    assert.match(output, /openclaw\.errorCategory: Str\(not_found\)/);
+    assert.match(output, /openclaw\.errorCode: Str\(DOCS_NOT_FOUND\)/);
+    assert.match(output, /http\.response\.status_code: Int\(404\)/);
+    assert.match(output, /http\.response\.status_code: Int\(503\)/);
     assert.match(output, /openclaw\.harness\.run/);
     assert.match(output, /Parent ID\s+: 7777777777777777\n\s+ID\s+: 8888888888888888/);
     assert.match(output, /gen_ai\.request\.model: Str\(openai\/gpt-5\.6-luna\)/);
@@ -225,8 +302,30 @@ test("Collector exports allowed metadata and strips every protected OTLP field",
     assert.match(output, /gen_ai\.request\.model: Str\(other\)/);
     assert.match(output, /gen_ai\.provider\.name: Str\(other\)/);
     assert.match(output, /Status message : timeout/);
+    assert.match(output, /Parent ID\s+: 8888888888888888\n\s+ID\s+: eeeeeeeeeeeeeeee/);
+    assert.match(output, /Parent ID\s+: eeeeeeeeeeeeeeee\n\s+ID\s+: ffffffffffffffff/);
+    for (const spanId of ["1212121212121212", "1313131313131313"]) {
+      const invalidSpan = output.split(/Span #\d+\n/).find((span) => new RegExp(`ID\\s*:\\s*${spanId}`).test(span));
+      assert.ok(invalidSpan, `synthetic validation span ${spanId} was exported`);
+      assert.doesNotMatch(invalidSpan, /http\.response\.status_code:/);
+    }
+    const invalidCategorySpan = output.split(/Span #\d+\n/).find((span) => /ID\s*:\s*1212121212121212/.test(span));
+    assert.match(invalidCategorySpan, /openclaw\.errorCategory: Str\(other\)/);
+    assert.match(invalidCategorySpan, /openclaw\.errorCode: Str\(other\)/);
+    const missingChannelSpan = output.split(/Span #\d+\n/).find((span) => /ID\s*:\s*dddddddddddddddd/.test(span));
+    assert.ok(missingChannelSpan, "synthetic model-call span was exported");
+    assert.doesNotMatch(missingChannelSpan, /openclaw\.channel:/);
+    assert.doesNotMatch(missingChannelSpan, /openclaw\.outcome:/);
+    assert.doesNotMatch(missingChannelSpan, /openclaw\.toolName:/);
+    for (const [spanId, toolName] of [["1414141414141414", "friday_jira_prepare_ticket"], ["1515151515151515", "friday_openai_latest_model"]]) {
+      const toolSpan = output.split(/Span #\d+\n/).find((span) => new RegExp(`ID\\s*:\\s*${spanId}`).test(span));
+      assert.ok(toolSpan, `synthetic tool span ${spanId} was exported`);
+      assert.match(toolSpan, new RegExp(`openclaw\\.toolName: Str\\(${toolName}\\)`));
+    }
+    assert.match(output, /openclaw\.toolName: Str\(other\)/);
     assert.doesNotMatch(output, /openclaw\.model_call\.prompt\.total_chars: Int\(-1\)/);
     assert.doesNotMatch(output, /Int\(999\)/);
+    assert.doesNotMatch(output, /FRIDAY_SENTINEL_LLM_/);
     assert.match(output, /service\.name: Str\(friday-gateway\)/);
     assert.doesNotMatch(output, /FRIDAY_SENTINEL_/);
   } finally {

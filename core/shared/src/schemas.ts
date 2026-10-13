@@ -133,6 +133,12 @@ export const jiraContextSchema = {
   properties: {},
 } as const satisfies JsonSchema;
 
+export const openAiLatestModelGuideSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {},
+} as const satisfies JsonSchema;
+
 export const jiraPrepareTicketSchema = {
   type: "object",
   additionalProperties: false,
