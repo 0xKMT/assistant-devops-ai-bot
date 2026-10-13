@@ -1,6 +1,7 @@
 import { chmod, lstat, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { redactCredentialShapes } from "@friday/shared";
 
 const DEFAULT_DIRECTORY = "/tmp/friday-error-diagnostics";
 const FILE_NAME = "errors.ndjson";
@@ -61,7 +62,9 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 function redactCredentials(value: string): string {
-  return value
+  // The strict shared set runs first so a header rule below cannot cut a
+  // private-key block apart; the loose truncated-token rules still all apply.
+  return redactCredentialShapes(value)
     .replace(/(\bauthorization\s*[:=]\s*(?:bearer\s+)?)[^\s,;"']+/giu, "$1[REDACTED]")
     .replace(/(\b(?:OPENAI_API_KEY|ANTHROPIC_API_KEY|API[_-]?KEY|ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|CLIENT[_-]?SECRET|PASSWORD)\s*[=:]\s*["']?)[^\s,;"']+/giu, "$1[REDACTED]")
     .replace(/(\bcookie\s*:\s*)[^\r\n]+/giu, "$1[REDACTED]")
@@ -73,7 +76,9 @@ function redactCredentials(value: string): string {
     .replace(/\bxox[abprs]-[A-Za-z0-9-]{1,250}/gu, "[REDACTED]")
     .replace(/\bgh[pousr]_[A-Za-z0-9]{1,255}/gu, "[REDACTED]")
     .replace(/\bgithub_pat_[A-Za-z0-9_]{1,255}/gu, "[REDACTED]")
-    .replace(/\beyJ[A-Za-z0-9_-]{7,4093}\.[A-Za-z0-9_-]{0,8192}(?:\.[A-Za-z0-9_-]{0,4096})?/gu, "[REDACTED]")
+    // The first JWT segment is consumed atomically; `.` is outside its class,
+    // so the match set is unchanged while `eyJ-eyJ-...` runs stay linear.
+    .replace(/\beyJ(?=([A-Za-z0-9_-]{7,4093}))\1\.[A-Za-z0-9_-]{0,8192}(?:\.[A-Za-z0-9_-]{0,4096})?/gu, "[REDACTED]")
     .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{1,16}\b/gu, "[REDACTED]");
 }
 

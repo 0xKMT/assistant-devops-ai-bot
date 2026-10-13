@@ -3,10 +3,11 @@
  * All repository access is allowlisted, output-bounded and redacted; this file
  * intentionally exposes no checkout, commit, push or arbitrary API primitive.
  */
-import type {
-  FridayRepositorySlug,
-  GitReadFileParams,
-  SafetyEnvelope,
+import {
+  redactCredentialShapes,
+  type FridayRepositorySlug,
+  type GitReadFileParams,
+  type SafetyEnvelope,
 } from "@friday/shared";
 import { lstat, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -303,6 +304,10 @@ export function redact(input: unknown): string {
   value = value.replace(/\bxapp-[A-Za-z0-9-]{10,}\b/g, "[REDACTED_SLACK_TOKEN]");
   value = value.replace(/https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]+/gi, "[REDACTED_SLACK_WEBHOOK]");
   value = value.replace(/(https?:\/\/)([^\s/@:]+):([^\s/@]+)@/gi, "$1[REDACTED]@");
+  // The shared set runs after the labelled token rules and before the line
+  // rules, so a line rule cannot cut a truncated private-key header away from
+  // its body; the labelled marker keeps review-snippet detection working.
+  value = redactCredentialShapes(value, "[REDACTED_CREDENTIAL]");
   value = value.replace(
     /(^[+\- ]?\s*[A-Za-z0-9_.-]*(?:auth|credential|webhook)[A-Za-z0-9_.-]*\s*[:=]\s*)(["']?)(?!\$\{|\{\{|var\.|local\.|module\.|data\.)([A-Za-z0-9+/=_-]{20,}|https?:\/\/[^\s"']+)\2/gim,
     "$1\"[REDACTED_LITERAL]\"",
