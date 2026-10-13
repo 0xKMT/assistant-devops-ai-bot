@@ -9,6 +9,8 @@ export interface RepositoryConfig {
   readonly root: string;
   readonly remoteUrl: string;
   readonly baseBranch: string;
+  /** Kubernetes version passed to helm and kubeconform for this repository. */
+  readonly kubernetesVersion: string;
 }
 
 export interface ReviewRuntimeConfig {
@@ -34,6 +36,11 @@ export interface ReviewRuntimeConfig {
 
 type RecordValue = Record<string, unknown>;
 
+export const DEFAULT_KUBERNETES_VERSION = "1.30.0";
+// Anchored and bounded: the value becomes a validator argv element, so only a
+// plain 1.x.y version may pass.
+const KUBERNETES_VERSION = /^1\.\d{1,2}\.\d{1,3}$/;
+
 function object(value: unknown, label: string): RecordValue {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object.`);
   return value as RecordValue;
@@ -50,6 +57,14 @@ function absolute(value: unknown, label: string): string {
   return path.normalize(result);
 }
 
+function kubernetesVersion(value: unknown, label: string): string {
+  if (value === undefined) return DEFAULT_KUBERNETES_VERSION;
+  if (typeof value !== "string" || !KUBERNETES_VERSION.test(value)) {
+    throw new Error(`${label} must be a Kubernetes version like ${DEFAULT_KUBERNETES_VERSION}.`);
+  }
+  return value;
+}
+
 function repository(value: unknown, index: number): RepositoryConfig {
   const item = object(value, `repositories[${index}]`);
   const slug = string(item.slug, `repositories[${index}].slug`);
@@ -64,6 +79,7 @@ function repository(value: unknown, index: number): RepositoryConfig {
     root: absolute(item.root, `repositories[${index}].root`),
     remoteUrl,
     baseBranch: string(item.baseBranch, `repositories[${index}].baseBranch`),
+    kubernetesVersion: kubernetesVersion(item.kubernetesVersion, `repositories[${index}].kubernetesVersion`),
   });
 }
 

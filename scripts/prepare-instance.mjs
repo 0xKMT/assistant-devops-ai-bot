@@ -190,8 +190,14 @@ for (const [index, repository] of repositories.entries()) {
   if (remoteUrl !== expectedRemote) fail(`${prefix}.remoteUrl must equal ${expectedRemote}`);
   const baseBranch = text(repository.baseBranch, `${prefix}.baseBranch`);
   if (!/^[A-Za-z0-9._/-]+$/.test(baseBranch)) fail(`${prefix}.baseBranch is invalid.`);
+  // Optional; omitted entries keep the adapter default so unchanged configs
+  // generate identical plugin configuration.
+  const kubernetesVersion = repository.kubernetesVersion;
+  if (kubernetesVersion !== undefined && (typeof kubernetesVersion !== "string" || !/^1\.\d{1,2}\.\d{1,3}$/.test(kubernetesVersion))) {
+    fail(`${prefix}.kubernetesVersion must be a Kubernetes version like 1.30.0.`);
+  }
   await assertDirectory(repositoryRoot, `${prefix}.root`);
-  normalizedRepositories.push({ slug, root: repositoryRoot, remoteUrl, baseBranch });
+  normalizedRepositories.push({ slug, root: repositoryRoot, remoteUrl, baseBranch, ...(kubernetesVersion === undefined ? {} : { kubernetesVersion }) });
 }
 
 // Phase 5: resolve execution/storage boundaries. Every executable and PATH

@@ -23,7 +23,9 @@ Node.js and OpenClaw versions.
 
 Keep `paths.openclawStateDir`, workspace, and cache distinct. Each repository
 needs an `owner/repository` slug, local root, matching HTTPS GitHub remote URL,
-and fixed base branch.
+and fixed base branch. `kubernetesVersion` is optional (`1.x.y`, default
+`1.30.0`) and sets the version helm and kubeconform validate that repository
+against.
 
 Validate before generating artifacts:
 

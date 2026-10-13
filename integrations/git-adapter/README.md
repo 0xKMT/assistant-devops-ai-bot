@@ -12,6 +12,11 @@ Startup is fail-closed: every execution path must be absolute, every repository
 must be unique, and remotes must use HTTPS GitHub URLs. Invalid or incomplete
 configuration prevents the plugin from registering tools.
 
+Each repository may set `kubernetesVersion` (`1.x.y`; default `1.30.0`). The
+GitOps review passes it to `helm lint`, `helm template` and `kubeconform` for
+that repository. It is read from the live allowlist, not from cached PR
+snapshots, and any other format fails configuration parsing.
+
 ## Security boundary
 
 - Uses existing local Git/GitHub credentials only through bounded operations.
