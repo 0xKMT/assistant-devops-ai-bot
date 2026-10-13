@@ -10,6 +10,7 @@ export interface SecurityPolicy {
   readonly allowedSlackBindings: readonly SlackPrincipalBinding[];
   readonly silentDeny: boolean;
   readonly auditRetentionDays: number;
+  readonly grantTtlMinutes: number;
 }
 
 export interface SlackPrincipalBinding {
@@ -96,25 +97,154 @@ export function enforceReviewHeadline(value: unknown, gate: VerifiedReviewGate):
   return [authoritativeReviewHeadline(gate), ...lines].filter(Boolean).join("\n");
 }
 
-export class PerTurnAuthorizationRegistry {
-  readonly #turns = new Map<string, AuthorizedTurn>();
+export const DEFAULT_GRANT_TTL_MINUTES = 30;
+export const MIN_GRANT_TTL_MINUTES = 1;
+export const MAX_GRANT_TTL_MINUTES = 60;
 
+/** Millisecond clock; injected so lifetime tests never sleep. */
+export type Clock = () => number;
+
+/**
+ * Run-scoped values with a bounded lifetime measured from the most recent
+ * write. Expired entries read as absent and are pruned on every read and
+ * write, so a run that never emits agent_end cannot hold state indefinitely.
+ */
+export class RunScopedExpiringMap<T> {
+  readonly #entries = new Map<string, { readonly value: T; readonly expiresAt: number }>();
+  readonly #ttlMs: number;
+  readonly #now: Clock;
+
+  constructor(ttlMinutes: number = DEFAULT_GRANT_TTL_MINUTES, now: Clock = Date.now) {
+    if (!Number.isInteger(ttlMinutes) || ttlMinutes < MIN_GRANT_TTL_MINUTES || ttlMinutes > MAX_GRANT_TTL_MINUTES) {
+      throw new Error("Friday Security Shield grant lifetime must be an integer number of minutes from 1 to 60.");
+    }
+    this.#ttlMs = ttlMinutes * 60_000;
+    this.#now = now;
+  }
+
+  get size(): number {
+    this.#prune(this.#now());
+    return this.#entries.size;
+  }
+
+  set(runId: string, value: T): void {
+    const now = this.#now();
+    this.#prune(now);
+    this.#entries.set(runId, { value, expiresAt: now + this.#ttlMs });
+  }
+
+  get(runId: string): T | undefined {
+    if (!runId) return undefined;
+    this.#prune(this.#now());
+    return this.#entries.get(runId)?.value;
+  }
+
+  has(runId: string): boolean {
+    return this.get(runId) !== undefined;
+  }
+
+  delete(runId: string): void {
+    if (runId) this.#entries.delete(runId);
+  }
+
+  clear(): void {
+    this.#entries.clear();
+  }
+
+  #prune(now: number): void {
+    for (const [runId, entry] of this.#entries) {
+      if (entry.expiresAt <= now) this.#entries.delete(runId);
+    }
+  }
+}
+
+export class PerTurnAuthorizationRegistry {
+  readonly #turns: RunScopedExpiringMap<AuthorizedTurn>;
+
+  constructor(ttlMinutes: number = DEFAULT_GRANT_TTL_MINUTES, now: Clock = Date.now) {
+    this.#turns = new RunScopedExpiringMap<AuthorizedTurn>(ttlMinutes, now);
+  }
+
+  get size(): number {
+    return this.#turns.size;
+  }
+
+  /** Grants, or refreshes, one run; callers must have authorized the principal. */
   grant(turn: AuthorizedTurn): void {
     if (!turn.runId.trim()) throw new Error("Friday Security Shield cannot grant an authorization without a run ID.");
     this.#turns.set(turn.runId, Object.freeze({ ...turn }));
   }
 
   has(runId: string): boolean {
-    return Boolean(runId) && this.#turns.has(runId);
+    return this.#turns.has(runId);
   }
 
   revoke(runId: string): void {
-    if (runId) this.#turns.delete(runId);
+    this.#turns.delete(runId);
   }
 
   clear(): void {
     this.#turns.clear();
   }
+}
+
+/**
+ * Resolves the run ID a hook acts for. When the event and the host context
+ * both carry one and they differ, neither is trusted and the result is empty,
+ * so a forged event run ID cannot borrow another run's grant.
+ */
+export function resolveHookRunId(eventRunId: unknown, contextRunId: unknown): string {
+  const fromEvent = String(eventRunId ?? "").trim();
+  const fromContext = String(contextRunId ?? "").trim();
+  if (fromEvent && fromContext && fromEvent !== fromContext) return "";
+  return fromEvent || fromContext;
+}
+
+/** Only an applicable, allowed Slack decision may create or refresh a grant. */
+export function mayGrantRun(decision: AuthorizationDecision): boolean {
+  return decision.applies && decision.allowed;
+}
+
+/** Every Friday-owned tool needs a live run grant, whatever the transport. */
+export function requiresRunGrant(toolName: unknown): boolean {
+  return String(toolName ?? "").trim().toLowerCase().startsWith("friday_");
+}
+
+export interface ToolCallInput {
+  readonly toolName: string;
+  readonly sessionKey: string;
+  readonly runId: string;
+}
+
+export interface ToolCallDenial {
+  readonly auditReason: "tool-call:no-grant" | "tool-call:unverified-turn";
+  readonly blockReason: string;
+}
+
+/**
+ * Decides one tool call. Friday tools fail closed without a live grant on any
+ * transport; other tools keep the Slack-session scope. Returns undefined to allow.
+ */
+export function evaluateToolCall(input: ToolCallInput, turns: PerTurnAuthorizationRegistry): ToolCallDenial | undefined {
+  const runId = input.runId.trim();
+  if (requiresRunGrant(input.toolName)) {
+    if (turns.has(runId)) return undefined;
+    return { auditReason: "tool-call:no-grant", blockReason: "Friday security policy blocked an unverified turn." };
+  }
+  if (!input.sessionKey.toLowerCase().includes(":slack:")) return undefined;
+  if (turns.has(runId)) return undefined;
+  return { auditReason: "tool-call:unverified-turn", blockReason: "Friday security policy blocked an unverified Slack turn." };
+}
+
+/** Final Slack egress: sanitize, then pin the headline to a live verified gate. */
+export function finalizeSlackEgress(
+  value: unknown,
+  gate: VerifiedReviewGate | undefined,
+): { readonly content: string; readonly reason: "authoritative-review-verdict" | "internal-or-sensitive-output" } {
+  const sanitized = sanitizeFridayOutput(value);
+  return gate
+    ? { content: enforceReviewHeadline(sanitized, gate), reason: "authoritative-review-verdict" }
+    : { content: sanitized, reason: "internal-or-sensitive-output" };
 }
 
 export type AuthorizationReason =
@@ -265,11 +395,21 @@ export function parseSecurityPolicy(value: unknown): SecurityPolicy {
   }
   const bindings = parseBindings(config.allowedSlackBindings);
   const retention = Number(config.auditRetentionDays ?? 30);
+  const grantTtlMinutes = config.grantTtlMinutes === undefined ? DEFAULT_GRANT_TTL_MINUTES : config.grantTtlMinutes;
+  if (
+    typeof grantTtlMinutes !== "number"
+    || !Number.isInteger(grantTtlMinutes)
+    || grantTtlMinutes < MIN_GRANT_TTL_MINUTES
+    || grantTtlMinutes > MAX_GRANT_TTL_MINUTES
+  ) {
+    throw new Error("Friday Security Shield grantTtlMinutes must be an integer from 1 to 60.");
+  }
   return Object.freeze({
     principalEmail,
     allowedSlackBindings: bindings,
     silentDeny: config.silentDeny !== false,
     auditRetentionDays: Number.isFinite(retention) ? Math.max(1, Math.min(90, Math.trunc(retention))) : 30,
+    grantTtlMinutes,
   });
 }
 

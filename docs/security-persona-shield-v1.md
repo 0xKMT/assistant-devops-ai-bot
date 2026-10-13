@@ -27,6 +27,20 @@ flowchart LR
   never inherited through a shared channel, thread or session.
 - DM access remains disabled by Slack channel configuration.
 
+## Tool gate and grant lifetime
+
+- A grant binds one authorized principal to one unique run ID. It is created
+  only after the exact Slack tuple is authorized in `before_agent_run`,
+  `before_prompt_build` or `reply_dispatch`.
+- Any `friday_*` tool requires a live grant for its run ID regardless of
+  transport or session key. Missing run IDs, unknown runs and expired grants are
+  denied with audit reason `tool-call:no-grant`. Non-Friday tools keep the
+  Slack-session rule (`tool-call:unverified-turn`).
+- Grants and verified review gates expire `grantTtlMinutes` (integer 1–60,
+  default 30) after the latest authorized grant or gate write. Only an
+  authorized re-grant refreshes a grant. Expired entries are pruned on lookup
+  and on every grant; `agent_end` revokes and `gateway_stop` clears them.
+
 ## Denial and audit
 
 Unauthorized requests produce no Slack reply and do not reach inference or

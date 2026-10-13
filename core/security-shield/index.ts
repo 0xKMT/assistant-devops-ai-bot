@@ -10,14 +10,17 @@ import { openSecurityAuditStore } from "./audit-store.js";
 import {
   SECURITY_SYSTEM_CONTEXT,
   PerTurnAuthorizationRegistry,
+  RunScopedExpiringMap,
   authorizeSlack,
+  evaluateToolCall,
+  finalizeSlackEgress,
+  mayGrantRun,
+  resolveHookRunId,
   parseSecurityPolicy,
   resolveBoundWorkspaceId,
   resolveFinalizedSlackAuthorizationInput,
   resolveSlackConversationId,
   resolveSlackWorkspaceId,
-  sanitizeFridayOutput,
-  enforceReviewHeadline,
   extractVerifiedReviewGate,
   type SlackAuthorizationInput,
   type VerifiedReviewGate,
@@ -70,10 +73,12 @@ export default definePluginEntry({
       path.join(api.runtime.state.resolveStateDir(), "friday-security.sqlite"),
       policy.auditRetentionDays,
     );
-    const authorizedTurns = new PerTurnAuthorizationRegistry();
+    // Grants and gates expire grantTtlMinutes after their latest write, so a
+    // run that never emits agent_end cannot keep its capability.
+    const authorizedTurns = new PerTurnAuthorizationRegistry(policy.grantTtlMinutes);
     // Tool results are tied to one agent run; a later Slack message cannot
     // borrow a verdict from another conversation or request.
-    const verifiedReviewGates = new Map<string, VerifiedReviewGate>();
+    const verifiedReviewGates = new RunScopedExpiringMap<VerifiedReviewGate>(policy.grantTtlMinutes);
 
     // Phase 2: release per-run grants and persistence handles on gateway stop.
     api.on("gateway_stop", () => {
@@ -107,7 +112,7 @@ export default definePluginEntry({
       const input = completeAuthorizationInput(recordEvent, recordContext, policy);
       if (!input.sessionKey?.toLowerCase().includes(":slack:") && text(recordContext.messageProvider).toLowerCase() !== "slack") return;
       const decision = authorizeSlack(input, policy);
-      if (decision.allowed) {
+      if (mayGrantRun(decision)) {
         const runId = text(recordContext.runId);
         if (!runId) {
           audit.record({ decision: "deny", reason: "agent-run:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
@@ -137,8 +142,8 @@ export default definePluginEntry({
       const decision = authorizeSlack(input, policy);
       if (!decision.applies) return;
       const runId = text(event.runId);
-      if (!decision.allowed || !runId) {
-        audit.record({ decision: "deny", reason: !decision.allowed ? `reply-dispatch:${decision.reason}` : "reply-dispatch:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+      if (!mayGrantRun(decision) || !runId) {
+        audit.record({ decision: "deny", reason: !mayGrantRun(decision) ? `reply-dispatch:${decision.reason}` : "reply-dispatch:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
         return;
       }
       authorizedTurns.grant({
@@ -151,22 +156,22 @@ export default definePluginEntry({
       audit.record({ decision: "allow", reason: "authorized-turn-granted:reply-dispatch", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
     }, { priority: 10_000, timeoutMs: 1_000 });
 
-    // Phase 5: every Slack tool call must present the run-scoped grant created
-    // above. Missing or stale run IDs fail closed.
+    // Phase 5: every friday_* tool call, on any transport, and every Slack tool
+    // call must present a live run-scoped grant created above. Missing, stale
+    // or expired run IDs fail closed.
     api.on("before_tool_call", async (event, ctx) => {
       const sessionKey = text(ctx.sessionKey);
-      if (!sessionKey.toLowerCase().includes(":slack:")) return;
-      const runId = text(event.runId || ctx.runId);
-      if (authorizedTurns.has(runId)) return;
-      audit.record({ decision: "deny", reason: "tool-call:unverified-turn", channelId: text(ctx.channelId), sessionKey });
-      return { block: true, blockReason: "Friday security policy blocked an unverified Slack turn." };
+      const denial = evaluateToolCall({ toolName: text(event.toolName), sessionKey, runId: resolveHookRunId(event.runId, ctx.runId) }, authorizedTurns);
+      if (!denial) return;
+      audit.record({ decision: "deny", reason: denial.auditReason, channelId: text(ctx.channelId), sessionKey });
+      return { block: true, blockReason: denial.blockReason };
     }, { priority: 10_000, timeoutMs: 1_000 });
 
     // Only the unified deterministic review can establish a merge verdict.
     // Store its verified result for the final egress hook to enforce.
     api.on("after_tool_call", async (event, ctx) => {
       if (text(event.toolName) !== "friday_unified_pr_review") return;
-      const runId = text(event.runId || ctx.runId);
+      const runId = resolveHookRunId(event.runId, ctx.runId);
       const gate = extractVerifiedReviewGate(event.result);
       if (runId && gate) verifiedReviewGates.set(runId, gate);
     }, { priority: 10_000, timeoutMs: 1_000 });
@@ -188,8 +193,8 @@ export default definePluginEntry({
       if (!isSlack) return;
       const input = completeAuthorizationInput(recordEvent, recordContext, policy);
       const decision = authorizeSlack(input, policy);
-      const runId = text(recordEvent.runId || recordContext.runId);
-      if (decision.allowed && runId) {
+      const runId = resolveHookRunId(recordEvent.runId, recordContext.runId);
+      if (mayGrantRun(decision) && runId) {
         authorizedTurns.grant({
           runId,
           accountId: text(input.accountId),
@@ -199,7 +204,7 @@ export default definePluginEntry({
         });
         audit.record({ decision: "allow", reason: "authorized-turn-granted:prompt-build", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
       } else {
-        audit.record({ decision: "deny", reason: !decision.allowed ? `prompt-build:${decision.reason}` : "prompt-build:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
+        audit.record({ decision: "deny", reason: !mayGrantRun(decision) ? `prompt-build:${decision.reason}` : "prompt-build:missing-run-id", accountId: input.accountId, workspaceId: input.workspaceId, senderId: input.senderId, channelId: input.channelId, sessionKey: input.sessionKey });
       }
       return { appendSystemContext: SECURITY_SYSTEM_CONTEXT };
     }, { priority: 1_000, timeoutMs: 1_000 });
@@ -209,12 +214,11 @@ export default definePluginEntry({
       if (text(ctx.channelId).toLowerCase() !== "slack") return;
       const runId = text(ctx.runId);
       const gate = verifiedReviewGates.get(runId);
-      const sanitized = sanitizeFridayOutput(event.content);
-      const content = gate ? enforceReviewHeadline(sanitized, gate) : sanitized;
+      const { content, reason } = finalizeSlackEgress(event.content, gate);
       if (content === event.content) return;
       audit.record({
         decision: "sanitize",
-        reason: gate ? "authoritative-review-verdict" : "internal-or-sensitive-output",
+        reason,
         channelId: text(ctx.conversationId),
         sessionKey: text(ctx.sessionKey),
       });
