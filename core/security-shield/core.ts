@@ -3,6 +3,8 @@
  * boundary. This module has no OpenClaw lifecycle or persistence dependency,
  * which keeps policy behavior deterministic and directly testable.
  */
+import { redactCredentialShapes } from "@friday/shared";
+
 export interface SecurityPolicy {
   readonly principalEmail: string;
   readonly allowedSlackBindings: readonly SlackPrincipalBinding[];
@@ -345,6 +347,7 @@ export function sanitizeFridayOutput(value: unknown): string {
     .replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]")
     .replace(/\bxapp-[A-Za-z0-9-]{10,}\b/g, "[REDACTED]")
     .replace(/https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]+/gi, "[REDACTED]");
+  output = redactCredentialShapes(output);
   // Phase 2 converts internal runtime/tool names and host paths into stable
   // user-facing language without changing the operational conclusion.
   for (const [pattern, replacement] of INTERNAL_TECHNOLOGY_REPLACEMENTS) {

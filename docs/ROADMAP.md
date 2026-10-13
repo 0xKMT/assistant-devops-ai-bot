@@ -44,7 +44,7 @@ all tasks or its operator gates are complete.
 
 These began as supplied review findings on the uncommitted WIP. Items 1–4 are
 **Resolved in PR #6**; the evidence is cited in source on `main` at `7ceb603`.
-Item 5 is **Resolved in Phase 0B Slice A (part 1)**.
+Item 5 is **Resolved in PR #9**.
 
 1. **Resolved in PR #6.** `buildOpenAIDocsToolPayload` calls
    `wrapUntrustedContent` in `integrations/openai-docs-adapter/core.ts`.
@@ -63,7 +63,7 @@ Item 5 is **Resolved in Phase 0B Slice A (part 1)**.
    redacts `xox`, `gh[pousr]_`, `github_pat_`, JWT (`eyJ...`) and `AKIA`/`ASIA`.
    Original finding, **Low:** redaction lacks `xox`, `ghp_`, `github_pat_`, JWT and `AKIA` patterns.
    Add bounded coverage without placing real secrets in fixtures or docs.
-5. **Resolved in Phase 0B Slice A (part 1).** `wrapUntrustedContent` in
+5. **Resolved in PR #9.** `wrapUntrustedContent` in
    `core/shared/src/untrusted.ts` prefixes `[quoted] ` to any content line
    whose leading words are `BEGIN UNTRUSTED DATA` or `END UNTRUSTED DATA`
    as whole words, after NFKC normalization and folding of common Cyrillic
