@@ -11,7 +11,21 @@ export interface SecurityPolicy {
   readonly silentDeny: boolean;
   readonly auditRetentionDays: number;
   readonly grantTtlMinutes: number;
+  /** Exact, lowercase tool names an authorized Slack run may call. */
+  readonly allowedToolNames: ReadonlySet<string>;
 }
+
+/**
+ * The model-facing Friday tools. scripts/prepare-instance.mjs renders the same
+ * list into both OpenClaw tools.alsoAllow and this plugin's allowedToolNames.
+ */
+export const DEFAULT_ALLOWED_TOOL_NAMES: readonly string[] = Object.freeze([
+  "friday_unified_pr_review",
+  "friday_batch_pr_review",
+  "friday_jira_get_context",
+  "friday_jira_prepare_ticket",
+  "friday_openai_latest_model",
+]);
 
 export interface SlackPrincipalBinding {
   readonly accountId: string;
@@ -188,16 +202,26 @@ export class PerTurnAuthorizationRegistry {
   }
 }
 
+export interface HookRunIdentity {
+  readonly runId: string;
+  /** True when the event and the host context carry different run IDs. */
+  readonly mismatch: boolean;
+}
+
 /**
  * Resolves the run ID a hook acts for. When the event and the host context
- * both carry one and they differ, neither is trusted and the result is empty,
- * so a forged event run ID cannot borrow another run's grant.
+ * both carry one and they differ, neither is trusted: the run ID is empty and
+ * the mismatch is reported, so a forged event run ID cannot borrow a grant.
  */
-export function resolveHookRunId(eventRunId: unknown, contextRunId: unknown): string {
+export function resolveHookRunIdentity(eventRunId: unknown, contextRunId: unknown): HookRunIdentity {
   const fromEvent = String(eventRunId ?? "").trim();
   const fromContext = String(contextRunId ?? "").trim();
-  if (fromEvent && fromContext && fromEvent !== fromContext) return "";
-  return fromEvent || fromContext;
+  if (fromEvent && fromContext && fromEvent !== fromContext) return { runId: "", mismatch: true };
+  return { runId: fromEvent || fromContext, mismatch: false };
+}
+
+export function resolveHookRunId(eventRunId: unknown, contextRunId: unknown): string {
+  return resolveHookRunIdentity(eventRunId, contextRunId).runId;
 }
 
 /** Only an applicable, allowed Slack decision may create or refresh a grant. */
@@ -210,30 +234,72 @@ export function requiresRunGrant(toolName: unknown): boolean {
   return String(toolName ?? "").trim().toLowerCase().startsWith("friday_");
 }
 
+export function normalizeToolName(toolName: unknown): string {
+  return String(toolName ?? "").trim().toLowerCase();
+}
+
 export interface ToolCallInput {
   readonly toolName: string;
   readonly sessionKey: string;
   readonly runId: string;
+  /** Host channel of the tool context, e.g. "slack". */
+  readonly channelId?: string;
+  /** Event and context run IDs disagreed; see resolveHookRunIdentity. */
+  readonly runIdMismatch?: boolean;
+  readonly allowedToolNames?: ReadonlySet<string>;
 }
 
 export interface ToolCallDenial {
-  readonly auditReason: "tool-call:no-grant" | "tool-call:unverified-turn";
+  readonly auditReason:
+    | "tool-call:no-grant"
+    | "tool-call:unverified-turn"
+    | "tool-call:not-allowlisted"
+    | "tool-call:run-id-mismatch";
   readonly blockReason: string;
 }
 
+const DEFAULT_ALLOWED_TOOL_SET: ReadonlySet<string> = new Set(DEFAULT_ALLOWED_TOOL_NAMES);
+
 /**
- * Decides one tool call. Friday tools fail closed without a live grant on any
- * transport; other tools keep the Slack-session scope. Returns undefined to allow.
+ * Decides one tool call; returns undefined to allow.
+ *
+ * Friday tools fail closed without a live grant on any transport. Any call in
+ * Slack scope must also name an allowlisted tool, so harness-native tools
+ * (shell, file read, fetch, web search, code mode) are denied even for an
+ * authorized owner. Slack scope is fail-closed: a Slack session key, a Slack
+ * tool context, a run holding a Slack grant, or a missing session key.
  */
 export function evaluateToolCall(input: ToolCallInput, turns: PerTurnAuthorizationRegistry): ToolCallDenial | undefined {
+  if (input.runIdMismatch) {
+    return { auditReason: "tool-call:run-id-mismatch", blockReason: "Friday security policy blocked an inconsistent turn." };
+  }
   const runId = input.runId.trim();
-  if (requiresRunGrant(input.toolName)) {
-    if (turns.has(runId)) return undefined;
+  const toolName = normalizeToolName(input.toolName);
+  if (requiresRunGrant(toolName) && !turns.has(runId)) {
     return { auditReason: "tool-call:no-grant", blockReason: "Friday security policy blocked an unverified turn." };
   }
-  if (!input.sessionKey.toLowerCase().includes(":slack:")) return undefined;
+  const sessionKey = input.sessionKey.trim().toLowerCase();
+  const slackScope = !sessionKey
+    || sessionKey.includes(":slack:")
+    || normalizeToolName(input.channelId) === "slack"
+    || turns.has(runId);
+  if (!slackScope) return undefined;
+  if (!(input.allowedToolNames ?? DEFAULT_ALLOWED_TOOL_SET).has(toolName)) {
+    return { auditReason: "tool-call:not-allowlisted", blockReason: "Friday security policy blocked a tool outside Friday's allowlist." };
+  }
   if (turns.has(runId)) return undefined;
   return { auditReason: "tool-call:unverified-turn", blockReason: "Friday security policy blocked an unverified Slack turn." };
+}
+
+/**
+ * Internal runtime status lines (model fallback switches) that must never
+ * reach Slack. Matches the whole line, including a leading status emoji.
+ */
+const INTERNAL_RUNTIME_NOTICE_LINE = /^[^\S\n]*\S*[^\S\n]*Model Fallback(?: cleared)?:[^\n]*(?:\n|$)/gm;
+
+export function stripInternalRuntimeNotices(value: string): string {
+  const stripped = value.replace(INTERNAL_RUNTIME_NOTICE_LINE, "");
+  return stripped === value ? value : stripped.trim();
 }
 
 /** Final Slack egress: sanitize, then pin the headline to a live verified gate. */
@@ -241,7 +307,7 @@ export function finalizeSlackEgress(
   value: unknown,
   gate: VerifiedReviewGate | undefined,
 ): { readonly content: string; readonly reason: "authoritative-review-verdict" | "internal-or-sensitive-output" } {
-  const sanitized = sanitizeFridayOutput(value);
+  const sanitized = stripInternalRuntimeNotices(sanitizeFridayOutput(value));
   return gate
     ? { content: enforceReviewHeadline(sanitized, gate), reason: "authoritative-review-verdict" }
     : { content: sanitized, reason: "internal-or-sensitive-output" };
@@ -410,7 +476,22 @@ export function parseSecurityPolicy(value: unknown): SecurityPolicy {
     silentDeny: config.silentDeny !== false,
     auditRetentionDays: Number.isFinite(retention) ? Math.max(1, Math.min(90, Math.trunc(retention))) : 30,
     grantTtlMinutes,
+    allowedToolNames: parseAllowedToolNames(config.allowedToolNames),
   });
+}
+
+function parseAllowedToolNames(value: unknown): ReadonlySet<string> {
+  if (value === undefined) return DEFAULT_ALLOWED_TOOL_SET;
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("Friday Security Shield allowedToolNames must be a non-empty list.");
+  }
+  const names = value.map((name) => {
+    if (typeof name !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(name.trim())) {
+      throw new Error("Friday Security Shield allowedToolNames must contain exact lowercase tool names.");
+    }
+    return name.trim();
+  });
+  return new Set(names);
 }
 
 /** Authorizes one exact Slack tuple; grants are never inferred from a session. */

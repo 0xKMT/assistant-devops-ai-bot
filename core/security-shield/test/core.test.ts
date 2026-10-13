@@ -25,10 +25,13 @@ import {
   requiresRunGrant,
   mayGrantRun,
   resolveHookRunId,
+  resolveHookRunIdentity,
+  DEFAULT_ALLOWED_TOOL_NAMES,
+  stripInternalRuntimeNotices,
   type VerifiedReviewGate,
 } from "../core.js";
 
-const policy = parseSecurityPolicy({
+const BASE_POLICY_CONFIG = {
   principalEmail: "owner@example.com",
   allowedSlackBindings: [{
     accountId: "primary",
@@ -37,7 +40,8 @@ const policy = parseSecurityPolicy({
     userId: "UOWNER01",
   }],
   silentDeny: true,
-});
+};
+const policy = parseSecurityPolicy(BASE_POLICY_CONFIG);
 
 test("accepts only the verified workspace/user/channel binding", () => {
   assert.deepEqual(authorizeSlack({ transport: "slack", accountId: "primary", workspaceId: "TPRIMARY01", channelId: "CFRIDAY01", senderId: "UOWNER01" }, policy), {
@@ -306,13 +310,86 @@ test("Friday tools require a live run grant on any transport", () => {
   assert.equal(requiresRunGrant("read"), false);
 });
 
-test("non-Friday tools keep the existing transport scope", () => {
+test("non-Friday tools keep the existing transport scope outside Slack", () => {
   const registry = new PerTurnAuthorizationRegistry();
   assert.equal(evaluateToolCall({ toolName: "read", sessionKey: NON_SLACK_SESSION, runId: "" }, registry), undefined);
-  assert.deepEqual(evaluateToolCall({ toolName: "read", sessionKey: SLACK_SESSION, runId: "run-unknown" }, registry), {
-    auditReason: "tool-call:unverified-turn",
-    blockReason: "Friday security policy blocked an unverified Slack turn.",
-  });
+  assert.deepEqual(evaluateToolCall({ toolName: "read", sessionKey: SLACK_SESSION, runId: "run-unknown" }, registry)?.auditReason, "tool-call:not-allowlisted");
+});
+
+const NOT_ALLOWLISTED = {
+  auditReason: "tool-call:not-allowlisted",
+  blockReason: "Friday security policy blocked a tool outside Friday's allowlist.",
+};
+
+test("default allowlist is exactly the five model-facing Friday tools", () => {
+  assert.deepEqual([...DEFAULT_ALLOWED_TOOL_NAMES], [
+    "friday_unified_pr_review",
+    "friday_batch_pr_review",
+    "friday_jira_get_context",
+    "friday_jira_prepare_ticket",
+    "friday_openai_latest_model",
+  ]);
+  assert.deepEqual([...policy.allowedToolNames], [...DEFAULT_ALLOWED_TOOL_NAMES]);
+});
+
+test("an authorized Slack run is denied every harness or unknown tool", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  for (const toolName of [
+    "bash", "Bash", "exec", "exec_command", "shell", "read", "web_fetch", "web_search", "fetch",
+    "apply_patch", "process", "code_mode", "wait", "spawn_agent", "message", "unknown_tool", "",
+    "friday_review_context", "friday_unified_pr_review_x", " friday_jira_get_context_extra",
+  ]) {
+    assert.deepEqual(evaluateToolCall({ toolName, sessionKey: SLACK_SESSION, runId: "run-owner" }, registry), NOT_ALLOWLISTED, toolName);
+  }
+});
+
+test("Slack scope fails closed without a Slack session key", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  // Native relay context without a session key, a granted run on another key,
+  // and a Slack tool context all count as Slack scope.
+  assert.deepEqual(evaluateToolCall({ toolName: "bash", sessionKey: "", runId: "" }, registry), NOT_ALLOWLISTED);
+  assert.deepEqual(evaluateToolCall({ toolName: "bash", sessionKey: NON_SLACK_SESSION, runId: "run-owner" }, registry), NOT_ALLOWLISTED);
+  assert.deepEqual(evaluateToolCall({ toolName: "bash", sessionKey: NON_SLACK_SESSION, runId: "", channelId: "Slack" }, registry), NOT_ALLOWLISTED);
+  assert.equal(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: "", runId: "run-owner" }, registry), undefined);
+});
+
+test("allowlisted tools still need the run grant on Slack", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: SLACK_SESSION, runId: "run-x" }, registry)?.auditReason, "tool-call:no-grant");
+});
+
+test("a configured allowlist replaces the default and is validated", () => {
+  const narrowed = parseSecurityPolicy({ ...BASE_POLICY_CONFIG, allowedToolNames: ["friday_jira_get_context"] });
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  assert.equal(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: SLACK_SESSION, runId: "run-owner", allowedToolNames: narrowed.allowedToolNames }, registry), undefined);
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_batch_pr_review", sessionKey: SLACK_SESSION, runId: "run-owner", allowedToolNames: narrowed.allowedToolNames }, registry), NOT_ALLOWLISTED);
+  for (const allowedToolNames of [[], "friday_x", ["Bash"], ["friday_*"], [""], [1]]) {
+    assert.throws(() => parseSecurityPolicy({ ...BASE_POLICY_CONFIG, allowedToolNames }), /allowedToolNames/);
+  }
+});
+
+test("a run ID mismatch has its own audit reason, before any other rule", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  assert.deepEqual(resolveHookRunIdentity("run-owner", "run-attacker"), { runId: "", mismatch: true });
+  assert.deepEqual(resolveHookRunIdentity("run-owner", ""), { runId: "run-owner", mismatch: false });
+  for (const toolName of ["friday_jira_get_context", "read"]) {
+    assert.deepEqual(evaluateToolCall({ toolName, sessionKey: NON_SLACK_SESSION, runId: "", runIdMismatch: true }, registry), {
+      auditReason: "tool-call:run-id-mismatch",
+      blockReason: "Friday security policy blocked an inconsistent turn.",
+    });
+  }
+});
+
+test("internal model fallback notices never reach Slack", () => {
+  assert.equal(stripInternalRuntimeNotices("↪️ Model Fallback: Friday (selected Friday; format)"), "");
+  assert.equal(stripInternalRuntimeNotices("↪️ Model Fallback cleared: Friday (was Friday)\nAnswer"), "Answer");
+  assert.equal(stripInternalRuntimeNotices("Answer\n↪️ Model Fallback: x (selected y; z)\nMore"), "Answer\nMore");
+  assert.equal(stripInternalRuntimeNotices("We discussed model fallback: none."), "We discussed model fallback: none.");
+  assert.equal(finalizeSlackEgress("↪️ Model Fallback: openai/gpt-5.6-terra (selected openai/gpt-5.6-luna; format)", undefined).content, "");
 });
 
 test("run grants expire after the configured lifetime", () => {

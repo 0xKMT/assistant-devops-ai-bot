@@ -7,6 +7,7 @@ import { access, chmod, copyFile, cp, mkdir, readFile, readdir, writeFile } from
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseSlackAccounts } from "./lib/slack-accounts.mjs";
+import { installCodexHomeConfig } from "./lib/codex-home-config.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
@@ -160,6 +161,11 @@ run(process.execPath, [path.join(root, "scripts", "install-plugins.mjs")]);
 run("openclaw", ["config", "patch", "--file", path.join(root, "build", "openclaw.patch.json"), "--dry-run"]);
 run("openclaw", ["config", "patch", "--file", path.join(root, "build", "openclaw.patch.json")]);
 await installWorkspace();
+// Codex-native shell/app surfaces are disabled only in codex-home config.toml.
+const codexHomeConfig = path.join(root, "build", "codex-home.config.toml");
+if (await access(codexHomeConfig).then(() => true, () => false)) {
+  await installCodexHomeConfig({ stateDir, managedPath: codexHomeConfig });
+}
 run("openclaw", ["config", "validate"]);
 run("openclaw", ["plugins", "doctor"]);
 run("openclaw", ["models", "list", "--provider", config.modelBackend.profile === "codex" ? "openai" : "anthropic"]);

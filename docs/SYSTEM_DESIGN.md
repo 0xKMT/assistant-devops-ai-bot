@@ -249,6 +249,30 @@ must never receive, enter or retain credential values; human-managed runtime
 wiring is confined to its own zone. The source’s no-credential learner row and
 Telegram notification requirement need a concrete, reviewed credential boundary.
 
+### Harness tool boundary — Current
+
+The model runtime (OpenClaw `codex` agentRuntime) has its own native tools —
+shell/exec, file read, apply_patch, hosted web search, code mode, apps — that
+OpenClaw `tools` policy does not govern. Friday closes them in three layers:
+
+1. **Shield allowlist (authority, fail closed).** Every tool call in Slack scope
+   (Slack session key, Slack tool context, a run holding a Slack grant, or no
+   session key) must name a tool in `allowedToolNames`; anything else is denied
+   with `tool-call:not-allowlisted`. Native Codex shell/patch/MCP calls reach
+   this hook through the native PreToolUse relay. `prepare-instance.mjs` renders
+   one list into both `tools.alsoAllow` and `allowedToolNames`. Event/context
+   run-ID disagreement is denied with `tool-call:run-id-mismatch`.
+2. **Harness configuration.** Codex app-server `sandbox: read-only` (no
+   network), `approvalPolicy: never`; `tools.web.search/fetch.enabled: false`
+   (also disables Codex hosted search); per-agent `codex-home/config.toml`
+   disables `shell_tool`, `unified_exec`, apps, browser, computer use, image
+   generation and multi-agent.
+3. **Egress.** Internal runtime notices (model fallback) are dropped before Slack.
+
+Residual: OpenClaw forces Codex code mode on in the thread config; its exec
+calls are relayed to the Shield and denied, and the read-only sandbox applies.
+Hosted web search never reaches a tool hook, so it relies on layer 2 only.
+
 ### Prohibited
 
 - Friday generic shell, arbitrary filesystem writes, arbitrary URL/path fetch,

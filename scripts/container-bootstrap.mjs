@@ -6,6 +6,7 @@
 import { access, chmod, copyFile, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { installCodexHomeConfig } from "./lib/codex-home-config.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
@@ -99,6 +100,13 @@ await mkdir(workspaceDir, { recursive: true, mode: 0o700 });
 for (const file of await readdir(generatedWorkspace)) {
   await copyFile(path.join(generatedWorkspace, file), path.join(workspaceDir, file));
   await chmod(path.join(workspaceDir, file), 0o600);
+}
+
+// Phase 5: Codex-native shell/app surfaces cannot be disabled through the
+// OpenClaw codex plugin schema; install the managed codex-home lockdown.
+const codexHomeConfig = path.join(buildDir, "codex-home.config.toml");
+if (await access(codexHomeConfig).then(() => true, () => false)) {
+  await installCodexHomeConfig({ stateDir, managedPath: codexHomeConfig });
 }
 
 run("openclaw", ["config", "validate"]);
