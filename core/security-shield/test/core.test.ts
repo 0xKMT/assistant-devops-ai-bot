@@ -18,6 +18,14 @@ import {
   enforceReviewHeadline,
   extractVerifiedReviewGate,
   wrapUntrustedContent,
+  DEFAULT_GRANT_TTL_MINUTES,
+  RunScopedExpiringMap,
+  evaluateToolCall,
+  finalizeSlackEgress,
+  requiresRunGrant,
+  mayGrantRun,
+  resolveHookRunId,
+  type VerifiedReviewGate,
 } from "../core.js";
 
 const policy = parseSecurityPolicy({
@@ -253,4 +261,134 @@ test("minimal audit persists only salted hashes and no message content", async (
   assert.notEqual(row.sender_hash, "UOTHER01");
   assert.deepEqual(columns.map(({ name }) => name), ["id", "occurred_at", "decision", "reason_code", "account_hash", "workspace_hash", "sender_hash", "channel_hash", "session_hash"]);
   assert.doesNotMatch(JSON.stringify(row), /message|content|primary|TPRIMARY01|UOTHER01|CFRIDAY01/);
+});
+
+const MINUTE = 60_000;
+const SLACK_SESSION = "agent:main:slack:channel:cfriday01";
+const NON_SLACK_SESSION = "agent:main:main";
+
+function manualClock(start = 1_000_000): { now: () => number; advance: (ms: number) => void } {
+  let current = start;
+  return { now: () => current, advance: (ms) => { current += ms; } };
+}
+
+function grantRun(registry: PerTurnAuthorizationRegistry, runId: string): void {
+  registry.grant({ runId, accountId: "primary", workspaceId: "TPRIMARY01", channelId: "CFRIDAY01", senderId: "UOWNER01" });
+}
+
+test("authorized Slack runs still reach every Friday tool", () => {
+  const registry = new PerTurnAuthorizationRegistry(DEFAULT_GRANT_TTL_MINUTES);
+  grantRun(registry, "run-owner");
+  for (const toolName of [
+    "friday_unified_pr_review",
+    "friday_batch_pr_review",
+    "friday_jira_get_context",
+    "friday_jira_prepare_ticket",
+    "friday_openai_latest_model",
+  ]) {
+    assert.equal(evaluateToolCall({ toolName, sessionKey: SLACK_SESSION, runId: "run-owner" }, registry), undefined, toolName);
+  }
+});
+
+test("Friday tools require a live run grant on any transport", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  const denied = {
+    auditReason: "tool-call:no-grant",
+    blockReason: "Friday security policy blocked an unverified turn.",
+  };
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: NON_SLACK_SESSION, runId: "run-other" }, registry), denied);
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: NON_SLACK_SESSION, runId: "" }, registry), denied);
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: "", runId: "" }, registry), denied);
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: SLACK_SESSION, runId: "" }, registry), denied);
+  assert.deepEqual(evaluateToolCall({ toolName: " FRIDAY_jira_get_context", sessionKey: NON_SLACK_SESSION, runId: "x" }, registry), denied);
+  assert.equal(requiresRunGrant("friday_batch_pr_review"), true);
+  assert.equal(requiresRunGrant("read"), false);
+});
+
+test("non-Friday tools keep the existing transport scope", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  assert.equal(evaluateToolCall({ toolName: "read", sessionKey: NON_SLACK_SESSION, runId: "" }, registry), undefined);
+  assert.deepEqual(evaluateToolCall({ toolName: "read", sessionKey: SLACK_SESSION, runId: "run-unknown" }, registry), {
+    auditReason: "tool-call:unverified-turn",
+    blockReason: "Friday security policy blocked an unverified Slack turn.",
+  });
+});
+
+test("run grants expire after the configured lifetime", () => {
+  const clock = manualClock();
+  const registry = new PerTurnAuthorizationRegistry(30, clock.now);
+  grantRun(registry, "run-owner");
+  clock.advance(30 * MINUTE - 1);
+  assert.equal(registry.has("run-owner"), true);
+  clock.advance(1);
+  assert.equal(registry.has("run-owner"), false);
+  assert.deepEqual(evaluateToolCall({ toolName: "friday_unified_pr_review", sessionKey: SLACK_SESSION, runId: "run-owner" }, registry)?.auditReason, "tool-call:no-grant");
+});
+
+test("agent_end revocation denies the run immediately", () => {
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  registry.revoke("run-owner");
+  assert.equal(evaluateToolCall({ toolName: "friday_batch_pr_review", sessionKey: SLACK_SESSION, runId: "run-owner" }, registry)?.auditReason, "tool-call:no-grant");
+});
+
+test("an authorized re-grant refreshes the lifetime from the latest grant", () => {
+  const clock = manualClock();
+  const registry = new PerTurnAuthorizationRegistry(10, clock.now);
+  grantRun(registry, "run-owner");
+  clock.advance(8 * MINUTE);
+  grantRun(registry, "run-owner");
+  clock.advance(8 * MINUTE);
+  assert.equal(registry.has("run-owner"), true);
+  clock.advance(2 * MINUTE);
+  assert.equal(registry.has("run-owner"), false);
+});
+
+test("grant pruning keeps expired runs out of memory", () => {
+  const clock = manualClock();
+  const registry = new PerTurnAuthorizationRegistry(1, clock.now);
+  for (let index = 0; index < 50; index += 1) grantRun(registry, `run-${index}`);
+  assert.equal(registry.size, 50);
+  clock.advance(MINUTE);
+  grantRun(registry, "run-fresh");
+  assert.equal(registry.size, 1);
+});
+
+test("verified review gates expire with the grant lifetime", () => {
+  const clock = manualClock();
+  const gates = new RunScopedExpiringMap<VerifiedReviewGate>(30, clock.now);
+  const gate: VerifiedReviewGate = { verdict: "BLOCK", reviewComplete: true, mergeRecommended: false, reasons: [] };
+  gates.set("run-owner", gate);
+  const draft = "Verdict: PASS\nLooks fine.";
+  assert.notEqual(finalizeSlackEgress(draft, gates.get("run-owner")).content, sanitizeFridayOutput(draft));
+  clock.advance(30 * MINUTE);
+  assert.equal(gates.get("run-owner"), undefined);
+  assert.deepEqual(finalizeSlackEgress(draft, gates.get("run-owner")), { content: sanitizeFridayOutput(draft), reason: "internal-or-sensitive-output" });
+});
+
+test("grant lifetime is a bounded integer number of minutes", () => {
+  const base = { principalEmail: "owner@example.com", allowedSlackBindings: [{ accountId: "primary", workspaceId: "TPRIMARY01", channelId: "CFRIDAY01", userId: "UOWNER01" }] };
+  assert.equal(parseSecurityPolicy(base).grantTtlMinutes, 30);
+  assert.equal(parseSecurityPolicy({ ...base, grantTtlMinutes: 1 }).grantTtlMinutes, 1);
+  assert.equal(parseSecurityPolicy({ ...base, grantTtlMinutes: 60 }).grantTtlMinutes, 60);
+  for (const grantTtlMinutes of [0, 61, 1.5, "30", null, Number.NaN]) {
+    assert.throws(() => parseSecurityPolicy({ ...base, grantTtlMinutes }), /grantTtlMinutes/, String(grantTtlMinutes));
+  }
+});
+
+test("a hook run ID is trusted only when event and context agree", () => {
+  assert.equal(resolveHookRunId("run-owner", "run-owner"), "run-owner");
+  assert.equal(resolveHookRunId("run-owner", ""), "run-owner");
+  assert.equal(resolveHookRunId(undefined, " run-owner "), "run-owner");
+  assert.equal(resolveHookRunId("run-owner", "run-attacker"), "");
+  const registry = new PerTurnAuthorizationRegistry();
+  grantRun(registry, "run-owner");
+  assert.equal(evaluateToolCall({ toolName: "friday_jira_get_context", sessionKey: NON_SLACK_SESSION, runId: resolveHookRunId("run-owner", "run-attacker") }, registry)?.auditReason, "tool-call:no-grant");
+});
+
+test("only an applicable authorized Slack decision may grant or refresh a run", () => {
+  assert.equal(mayGrantRun(authorizeSlack({ transport: "slack", accountId: "primary", workspaceId: "TPRIMARY01", channelId: "CFRIDAY01", senderId: "UOWNER01" }, policy)), true);
+  assert.equal(mayGrantRun(authorizeSlack({ transport: "local", sessionKey: "agent:main:main", senderId: "UOTHER01" }, policy)), false);
+  assert.equal(mayGrantRun(authorizeSlack({ transport: "slack", accountId: "primary", workspaceId: "TPRIMARY01", channelId: "CFRIDAY01", senderId: "UOTHER01" }, policy)), false);
 });

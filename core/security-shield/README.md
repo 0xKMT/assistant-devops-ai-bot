@@ -14,6 +14,18 @@ Controls:
 - A second identity gate in `before_agent_run`.
 - `before_agent_run` creates a grant for one unique `runId`; tool calls must carry
   that exact run ID and the grant is revoked at `agent_end`.
+- Every tool whose name starts with `friday_` requires a live run grant on any
+  transport or session key; a missing run ID, unknown run or expired grant is
+  blocked ("Friday security policy blocked an unverified turn.") and audited as
+  `tool-call:no-grant`. Other tools keep the Slack-session scope
+  (`tool-call:unverified-turn`).
+- Grants expire `grantTtlMinutes` (integer 1–60, default 30) after the most
+  recent authorized grant for that run. An authorized `before_agent_run`,
+  `before_prompt_build` or `reply_dispatch` re-grant refreshes it; nothing else
+  does. Verified review gates use the same lifetime, so an expired gate no longer
+  sets the Slack headline. Expired entries are pruned on every lookup and grant;
+  `agent_end` revocation and the `gateway_stop` clear still apply. A value
+  outside the range, a fraction or a string fails configuration parsing.
 - Static prompt guidance treats PR comments, logs, alerts, tickets, thread
   quotations, and tool output as untrusted evidence.
 - Outbound Slack messages redact credentials, internal model/runtime names,
